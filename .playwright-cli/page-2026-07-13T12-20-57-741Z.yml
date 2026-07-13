@@ -1,0 +1,81 @@
+- generic [ref=e132]:
+  - generic [ref=e142]:
+    - generic [ref=e143]:
+      - generic [ref=e144] [cursor=pointer]: 视频
+      - generic [ref=e147] [cursor=pointer]: 训练
+    - textbox "搜索" [ref=e153]
+    - generic [ref=e156]:
+      - generic [ref=e157]:
+        - generic [ref=e158]:
+          - generic [ref=e159]: 我的学习目标
+          - generic [ref=e160]: 目标设定 ›
+        - generic [ref=e161]: 查看我的学习日历 ›
+      - generic [ref=e162]: 打卡代表你完成了相关目标的学习哦~
+      - generic [ref=e163]:
+        - generic [ref=e164]:
+          - generic [ref=e165]:
+            - generic [ref=e166]: 今日任务
+            - generic [ref=e167]: 设置 ›
+          - generic [ref=e170]: 当前没有任务
+          - generic [ref=e171]: 快来设置今天的任务吧~
+        - generic [ref=e172]:
+          - generic [ref=e176]: 当前没有目标
+          - generic [ref=e177]: 快来设置你的目标吧~
+          - generic [ref=e178] [cursor=pointer]: 去打卡
+    - generic [ref=e180]:
+      - generic [ref=e181] [cursor=pointer]: 同步教材
+      - generic [ref=e186] [cursor=pointer]: 课程学习
+      - generic [ref=e191] [cursor=pointer]: 知识归纳
+    - generic [ref=e196]:
+      - generic [ref=e197]: 视频推荐
+      - generic [ref=e200]: 更多 ›
+    - generic [ref=e201]:
+      - generic [ref=e202] [cursor=pointer]:
+        - generic [ref=e206]:
+          - generic [ref=e207]: 学术英语读写
+          - generic [ref=e208]: 华中科技大学/
+        - generic [ref=e210]: ▣ 1.3万
+        - generic [ref=e211]: ▢ 23
+      - generic [ref=e212] [cursor=pointer]:
+        - generic [ref=e216]:
+          - generic [ref=e217]: 摄影基础
+          - generic [ref=e218]: 电子科技大学/
+        - generic [ref=e220]: ▣ 1.3万
+        - generic [ref=e221]: ▢ 23
+      - generic [ref=e222] [cursor=pointer]:
+        - generic [ref=e226]:
+          - generic [ref=e227]: 美妆课程
+          - generic [ref=e228]: 墨尔本大学/
+        - generic [ref=e230]: ▣ 9864
+        - generic [ref=e231]: ▢ 18
+      - generic [ref=e232] [cursor=pointer]:
+        - generic [ref=e236]:
+          - generic [ref=e237]: 3D动画与特效
+          - generic [ref=e238]: 中国科学技术大学/
+        - generic [ref=e240]: ▣ 8276
+        - generic [ref=e241]: ▢ 16
+    - generic [ref=e242]:
+      - generic [ref=e243]: 本周课程排行
+      - generic [ref=e246]: 更多 ›
+    - generic [ref=e248]:
+      - generic [ref=e249] [cursor=pointer]:
+        - generic [ref=e250]: "1"
+        - generic [ref=e254]: 高效阅读方法
+        - generic [ref=e255]: 本周学习热度 No.1
+      - generic [ref=e256] [cursor=pointer]:
+        - generic [ref=e257]: "2"
+        - generic [ref=e261]: 心理学基础
+        - generic [ref=e262]: 本周新增 5 节
+      - generic [ref=e263] [cursor=pointer]:
+        - generic [ref=e264]: "3"
+        - generic [ref=e268]: 语法层次训练
+        - generic [ref=e269]: 11 课时
+    - generic [ref=e270]: 精品课程
+    - generic [ref=e277] [cursor=pointer]:
+      - generic [ref=e278]: 每天掌握一个 Awesome Word
+      - generic [ref=e279]: 轻松积累词汇 · 让表达更丰富
+  - tablist [ref=e281]:
+    - tab "学习" [selected] [ref=e283] [cursor=pointer]
+    - tab "计划" [ref=e293] [cursor=pointer]
+    - tab "社区" [ref=e303] [cursor=pointer]
+    - tab "我的" [ref=e313] [cursor=pointer]
