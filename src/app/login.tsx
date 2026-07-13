@@ -408,11 +408,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     backgroundColor: '#FFFFFF',
-    shadowColor: '#CE996C',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 2,
+    boxShadow: '0 -2px 10px rgba(206, 153, 108, 0.08)',
   },
   tabs: {
     height: 62,
