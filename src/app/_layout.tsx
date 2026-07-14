@@ -1,23 +1,19 @@
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
-
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-
-void SplashScreen.preventAutoHideAsync();
+import { Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <>
+      <StatusBar style="dark" />
       <Stack initialRouteName="index" screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="login" />
-        <Stack.Screen name="guest" />
-        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="index" options={{ animation: 'none' }} />
+        <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
+        <Stack.Screen name="role-select" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="login" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="register" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="guest" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
       </Stack>
-      <AnimatedSplashOverlay />
-    </ThemeProvider>
+    </>
   );
 }

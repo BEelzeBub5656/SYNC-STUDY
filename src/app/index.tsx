@@ -1,189 +1,108 @@
-import { Akshar_600SemiBold } from '@expo-google-fonts/akshar/600SemiBold';
-import { useFonts } from '@expo-google-fonts/akshar/useFonts';
 import { router } from 'expo-router';
+import { useEffect } from 'react';
+import { Image, StyleSheet, Text, View } from 'react-native';
 
-import {
-  Image,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions
-} from 'react-native';
+export default function LaunchScreen() {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      router.replace('/onboarding');
+    }, 1500);
 
-export default function HomeScreen() {
-  const { width, height } = useWindowDimensions();
-  const handleGuestPress = () => {
-    router.push('/guest');
-  };
-
-  const handleLoginPress = () => {
-    router.push('/login');
-  };
-  const bottomImageHeight = width * (267 / 404);
-  const [fontsLoaded] = useFonts({
-    Akshar_600SemiBold,
-  });
-
-  if (!fontsLoaded) {
-    return null;
-  }
+    return () => {
+      clearTimeout(timer);
+    };
+  }, []);
 
   return (
     <View style={styles.container}>
-      <Image
-        source={require('@/assets/images/welcome_facing/Frame 1833.png')}
-        style={styles.mascot}
-        resizeMode="contain"
-      />
-      <Text style={styles.title}>与你的学习搭子一起智能学习
-      </Text>
-      <Text style={styles.btitle}>Smart Study with Your buddy
-      </Text>
-
-      <View style={styles.guestGroup}>
-        <Image
-          source={require('@/assets/images/welcome_facing/icon4.png')}
-          resizeMode="contain"
-        />
-
-        <Pressable
-          onPress={handleGuestPress}
-          style={({ pressed }) => [
-            styles.button,
-            styles.guestButton,
-            pressed && styles.pressedButton,
-          ]}>
-          <Text style={styles.buttonText}>游客</Text>
-          </Pressable>
-        </View>
-      
-        <View
-          style={[
-            styles.loginGroup,
-            { bottom: bottomImageHeight-33 },
-          ]}>
-        <Image
-                source={require('@/assets/images/welcome_facing/icon5.png')}
-                ></Image>
-        <Pressable
-          onPress={handleLoginPress}
-          style={({ pressed }) => [
-            styles.button,
-            styles.loginButton,
-            pressed && styles.pressedButton,
-          ]}>
-          <Text style={styles.buttonText}>登录</Text>
+      <View style={styles.brandBlock}>
+        <View style={styles.brandRow}>
           <Image
-            source={require('@/assets/images/welcome_facing/leaf.png')}
-            style={styles.loginLeaf}
-            resizeMode='contain'
-            ></Image>
-        </Pressable>
-        
+            source={require('@/assets/images/welcome_facing/Frame 1833.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+          <Text style={styles.chineseBrand}>灵犀学伴</Text>
+        </View>
+        <Text style={styles.englishBrand}>Sync Study</Text>
       </View>
-        <Image
-          source={require('@/assets/images/welcome_facing/bottom.png')}
-          style={styles.bottomIcon}
-          resizeMode="cover"
-        />
+
+      <Image
+        source={require('@/assets/images/welcome_facing/bottom.png')}
+        style={styles.bottomImage}
+        resizeMode="cover"
+      />
+
+      <View style={styles.sloganBlock}>
+        <Text style={styles.slogan}>与你的学习搭子一起智能学习</Text>
+        <Text style={styles.englishSlogan}>Smart Study with Your Buddy</Text>
       </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    position: 'relative',
     alignItems: 'center',
     backgroundColor: '#F5F5F5',
   },
-
-  mascot: {
+  brandBlock: {
     position: 'absolute',
-    top: 82,
-    width: 75,
-    height: 75,
-  },
-
-  guestGroup: {
-  position: 'absolute',
-  left: 20,
-  top: 325,
-  alignItems: 'center',
-  zIndex: 1,
-  },
-
-  loginGroup: {
-    position: 'absolute',
-    right: 24,
+    top: '22%',
     alignItems: 'center',
-    zIndex: 1,
-  },
-
-  loginLeaf: {
-    position: 'absolute',
-    width: 36,
-    height: 26,
-    right: 0,
-    top: -12,
     zIndex: 2,
   },
-
-  button: {
-    position: 'relative',
-    width: 170,
-    height: 50,
-    justifyContent: 'center',
+  brandRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 66,
-    overflow: 'visible',
-
-    boxShadow: '0px 6px 12px 0px rgba(90, 55, 20, 0.16)',
+    gap: 22,
   },
-
-  guestButton: {
-    marginTop: -10,
-    backgroundColor: '#FFFFFF',
+  logo: {
+    width: 62,
+    height: 62,
   },
-
-  loginButton: {
-    backgroundColor: '#FFD29B',
+  chineseBrand: {
+    color: '#FF921E',
+    fontSize: 34,
+    fontWeight: '700',
+    letterSpacing: 5,
   },
-
-  title: {
+  englishBrand: {
+    marginTop: 8,
+    color: '#FF921E',
+    fontSize: 21,
+    fontWeight: '600',
+    letterSpacing: 11,
+  },
+  bottomImage: {
     position: 'absolute',
-    top: 225,
-    fontSize: 18,
-    fontFamily: 'Akshar_600SemiBold',
-    color: '#FF8D00',
-    letterSpacing: 5.4,
+    left: 0,
+    bottom: 0,
+    width: '100%',
+    aspectRatio: 404 / 267,
   },
-  
-  btitle: {
+  sloganBlock: {
     position: 'absolute',
-    top: 250,
-    fontSize: 18,
-    fontFamily: 'Akshar_600SemiBold',
-    color: '#FF8D00',
-    letterSpacing: 0.9,
+    left: 16,
+    right: 16,
+    bottom: '9%',
+    alignItems: 'center',
+    zIndex: 2,
   },
-
-  pressedButton: {
-    opacity: 0.6,
+  slogan: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: 2.5,
+    textAlign: 'center',
   },
-
-  buttonText: {
-    fontSize: 20,
-    color: '#7A3C10',
+  englishSlogan: {
+    marginTop: 2,
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: 0.7,
+    textAlign: 'center',
   },
-
-  bottomIcon: {
-  position: 'absolute',
-  left: 0,
-  bottom: 0,
-  width: '100%',
-  aspectRatio: 404 / 267,
-  zIndex: 0,
-},
 });

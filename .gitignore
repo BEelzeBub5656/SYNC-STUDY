@@ -36,6 +36,9 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# CodeGraph local index
+.codegraph/
+
 example
 
 # generated native folders
