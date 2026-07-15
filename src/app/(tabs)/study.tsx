@@ -1,5 +1,12 @@
+import { Inter_800ExtraBold, useFonts } from '@expo-google-fonts/inter';
 import { LinearGradient } from 'expo-linear-gradient';
-import type { ImageSourcePropType } from 'react-native';
+import { useState } from 'react';
+import type {
+    ImageSourcePropType,
+    StyleProp,
+    TextStyle,
+    ViewStyle
+} from 'react-native';
 import {
     Image,
     ImageBackground,
@@ -8,9 +15,14 @@ import {
     StyleSheet,
     Text,
     TextInput,
+    useWindowDimensions,
     View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Path } from 'react-native-svg';
+
+type StudyMode = 'video' | 'training';
+type TrapezoidVariant = 'challenge' | 'points' | 'paper' | 'mock';
 
 type QuickAction = {
     id: string;
@@ -178,6 +190,46 @@ function SectionTitle({
     );
 }
 
+function QuickWaves({ color }: { color: string }) {
+    const wavePath = 'M -8 8 C 7 0 22 0 37 8 S 67 16 82 8 S 112 0 127 8';
+
+    return (
+        <Svg
+            pointerEvents="none"
+            style={styles.quickWaves}
+            viewBox="0 0 120 42"
+            preserveAspectRatio="none"
+        >
+            <Path
+                d={wavePath}
+                stroke={color}
+                strokeOpacity={0.42}
+                strokeWidth={4}
+                strokeLinecap="round"
+                fill="none"
+            />
+            <Path
+                d={wavePath}
+                y={13}
+                stroke={color}
+                strokeOpacity={0.42}
+                strokeWidth={4}
+                strokeLinecap="round"
+                fill="none"
+            />
+            <Path
+                d={wavePath}
+                y={26}
+                stroke={color}
+                strokeOpacity={0.42}
+                strokeWidth={4}
+                strokeLinecap="round"
+                fill="none"
+            />
+        </Svg>
+    );
+}
+
 function QuickActionCard({ action }: { action: QuickAction }) {
     return (
         <Pressable
@@ -187,24 +239,7 @@ function QuickActionCard({ action }: { action: QuickAction }) {
                 pressed && styles.pressed
             ]}
         >
-            <Text
-                pointerEvents="none"
-                style={[styles.quickWave, styles.quickWaveOne, { color: action.stripeColor }]}
-            >
-                ～～
-            </Text>
-            <Text
-                pointerEvents="none"
-                style={[styles.quickWave, styles.quickWaveTwo, { color: action.stripeColor }]}
-            >
-                ～～
-            </Text>
-            <Text
-                pointerEvents="none"
-                style={[styles.quickWave, styles.quickWaveThree, { color: action.stripeColor }]}
-            >
-                ～～
-            </Text>
+            <QuickWaves color={action.stripeColor} />
             {action.badgeImage ? (
                 <Image
                     source={action.badgeImage}
@@ -266,7 +301,13 @@ function VideoCard({ item }: { item: VideoItem }) {
 
 function CourseRankingCard({ ranking }: { ranking: CourseRanking }) {
     return (
-        <View style={styles.rankingCard}>
+        <LinearGradient
+            colors={['#FFD29B', '#FCF1E4', '#FCF1E4']}
+            locations={[0, 0.3, 1]}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={styles.rankingCard}
+        >
             <View style={styles.rankingHeader}>
                 <View style={styles.rankingTitleRow}>
                     <Text style={styles.rankingTitle}>{ranking.title}</Text>
@@ -297,11 +338,355 @@ function CourseRankingCard({ ranking }: { ranking: CourseRanking }) {
                     </Pressable>
                 ))}
             </View>
+        </LinearGradient>
+    );
+}
+
+const friendRecords = [
+    {
+        id: 'minbie',
+        name: 'Minbie',
+        detail: 'Minbie今日完成了数学闯关',
+        avatar: require('@/assets/images/InGatePng/icon7.png'),
+        avatarBackground: '#FFD9A8'
+    },
+    {
+        id: 'caaary',
+        name: 'Caaary',
+        detail: 'Caaary今日完成了英语闯关',
+        avatar: require('@/assets/images/InGatePng/icon9.png'),
+        avatarBackground: '#DCECF9'
+    }
+];
+
+function TrapezoidBackground({
+    color,
+    variant
+}: {
+    color: string;
+    variant: TrapezoidVariant;
+}) {
+    const challengePath =
+        'M 7 0 H 93 C 97 0 100 3 99 8 L 88 92 C 87 97 85 100 80 100 H 7 C 3 100 0 97 0 93 V 7 C 0 3 3 0 7 0 Z';
+    const pointsPath =
+        'M 15 0 H 93 C 97 0 100 3 100 7 V 93 C 100 97 97 100 93 100 H 8 C 3 100 0 97 1 92 L 8 8 C 9 3 11 0 15 0 Z';
+    const paperPath =
+        'M 7 0 H 93 C 97 0 100 3 99 8 L 92 92 C 91 97 89 100 84 100 H 7 C 3 100 0 97 0 93 V 7 C 0 3 3 0 7 0 Z';
+    const mockPath =
+        'M 19 0 H 93 C 97 0 100 3 100 7 V 93 C 100 97 97 100 93 100 H 8 C 3 100 0 97 1 92 L 12 8 C 13 3 15 0 19 0 Z';
+    const pathByVariant: Record<TrapezoidVariant, string> = {
+        challenge: challengePath,
+        points: pointsPath,
+        paper: paperPath,
+        mock: mockPath
+    };
+
+    return (
+        <Svg
+            pointerEvents="none"
+            style={styles.trapezoidBackground}
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+        >
+            <Path
+                d={pathByVariant[variant]}
+                fill={color}
+            />
+        </Svg>
+    );
+}
+
+function OutlinedText({
+    text,
+    strokeColor,
+    strokeWidth = 3,
+    containerStyle,
+    textStyle
+}: {
+    text: string;
+    strokeColor: string;
+    strokeWidth?: number;
+    containerStyle: StyleProp<ViewStyle>;
+    textStyle: StyleProp<TextStyle>;
+}) {
+    const diagonalOffset = Math.max(1, Math.round(strokeWidth * 0.7));
+    const offsets = [
+        [-strokeWidth, 0],
+        [strokeWidth, 0],
+        [0, -strokeWidth],
+        [0, strokeWidth],
+        [-diagonalOffset, -diagonalOffset],
+        [diagonalOffset, -diagonalOffset],
+        [-diagonalOffset, diagonalOffset],
+        [diagonalOffset, diagonalOffset]
+    ];
+
+    return (
+        <View pointerEvents="none" style={containerStyle}>
+            {offsets.map(([x, y]) => (
+                <Text
+                    key={`${x}-${y}`}
+                    style={[
+                        textStyle,
+                        styles.outlinedTextLayer,
+                        {
+                            color: strokeColor,
+                            transform: [{ translateX: x }, { translateY: y }]
+                        }
+                    ]}
+                >
+                    {text}
+                </Text>
+            ))}
+            <Text style={[textStyle, styles.outlinedTextLayer, styles.outlinedTextFill]}>
+                {text}
+            </Text>
+        </View>
+    );
+}
+
+function TrainingHomeContent({ interLoaded }: { interLoaded: boolean }) {
+    const { width: screenWidth } = useWindowDimensions();
+    const trainingBoardWidth = Math.min(400, screenWidth - 40);
+    const trainingBoardHeight = trainingBoardWidth / 2;
+    const boardScale = trainingBoardHeight / 180;
+
+    return (
+        <View style={styles.trainingContent}>
+            <View style={[styles.trainingBoard, { height: trainingBoardHeight }]}>
+                <Image
+                    source={require('@/assets/images/InGatePng/icon4.png')}
+                    style={styles.trainingTrophyMascot}
+                    resizeMode="contain"
+                />
+
+                <Pressable
+                    style={({ pressed }) => [
+                        styles.trainingTile,
+                        styles.challengeTile,
+                        {
+                            width: 195 * boardScale,
+                            height: 110 * boardScale
+                        },
+                        pressed && styles.pressed
+                    ]}
+                >
+                    <TrapezoidBackground color="#FF8E6F" variant="challenge" />
+                    <OutlinedText
+                        text="学科闯关"
+                        strokeColor="#FF8361"
+                        containerStyle={styles.challengeTitleGraphic}
+                        textStyle={styles.challengeTitle}
+                    />
+                    <Text style={styles.challengeDescription}>
+                        AI根据近期做题为你推荐的闯关
+                    </Text>
+                    <View style={styles.challengeButton}>
+                        <Text style={styles.challengeButtonText}>进入</Text>
+                        <Text style={styles.challengeButtonArrow}>›</Text>
+                    </View>
+                </Pressable>
+
+                <Pressable
+                    style={({ pressed }) => [
+                        styles.trainingTile,
+                        styles.pointsTile,
+                        {
+                            width: 160 * boardScale,
+                            height: 55 * boardScale
+                        },
+                        pressed && styles.pressed
+                    ]}
+                >
+                    <TrapezoidBackground color="#9FD4FF" variant="points" />
+                    <OutlinedText
+                        text="积分排名"
+                        strokeColor="#66B7F9"
+                        strokeWidth={2}
+                        containerStyle={styles.pointsTitleGraphic}
+                        textStyle={styles.pointsTitle}
+                    />
+                    <Image
+                        source={require('@/assets/images/InGatePng/icon29.png')}
+                        style={styles.pointsCloud}
+                        resizeMode="contain"
+                    />
+                    <View style={styles.pointsBubbleOne} />
+                    <View style={styles.pointsBubbleTwo} />
+                </Pressable>
+
+                <Pressable
+                    style={({ pressed }) => [
+                        styles.trainingTile,
+                        styles.paperTile,
+                        {
+                            top: 125 * boardScale,
+                            width: 160 * boardScale,
+                            height: 55 * boardScale
+                        },
+                        pressed && styles.pressed
+                    ]}
+                >
+                    <TrapezoidBackground color="#FFB67B" variant="paper" />
+                    <Image
+                        source={require('@/assets/images/InGatePng/icon14.png')}
+                        style={styles.paperTileIcon}
+                        resizeMode="contain"
+                    />
+                    <OutlinedText
+                        text="智能组卷"
+                        strokeColor="#FF984B"
+                        strokeWidth={2}
+                        containerStyle={styles.paperTitleGraphic}
+                        textStyle={styles.paperTileText}
+                    />
+                </Pressable>
+
+                <Pressable
+                    style={({ pressed }) => [
+                        styles.trainingTile,
+                        styles.mockTile,
+                        {
+                            top: 70 * boardScale,
+                            width: 195 * boardScale,
+                            height: 110 * boardScale
+                        },
+                        pressed && styles.pressed
+                    ]}
+                >
+                    <TrapezoidBackground color="#D08ADE" variant="mock" />
+                    <Text style={styles.mockDescription}>
+                        考试真题训练，智能模拟测试
+                    </Text>
+                    <View style={styles.mockStartButton}>
+                        <Text style={styles.mockStartText}>开始</Text>
+                    </View>
+                    <OutlinedText
+                        text="真题模拟"
+                        strokeColor="#C164D4"
+                        containerStyle={styles.mockTitleGraphic}
+                        textStyle={[
+                            styles.mockTitle,
+                            interLoaded && styles.mockTitleInter
+                        ]}
+                    />
+                </Pressable>
+            </View>
+
+            <Pressable
+                style={({ pressed }) => [styles.dailyChallenge, pressed && styles.pressed]}
+            >
+                <LinearGradient
+                    colors={['#FF7881', '#FFFA98']}
+                    start={{ x: 0, y: 0.5 }}
+                    end={{ x: 1, y: 0.5 }}
+                    style={styles.dailyChallengeGradient}
+                >
+                    <Image
+                        source={require('@/assets/images/InGatePng/icon39.png')}
+                        style={styles.dailyCheckerTop}
+                        resizeMode="stretch"
+                    />
+                    <Image
+                        source={require('@/assets/images/InGatePng/icon39.png')}
+                        style={styles.dailyCheckerBottom}
+                        resizeMode="stretch"
+                    />
+                    <Text style={styles.dailyChallengeText}>
+                        翻开第一页，点亮新世界！{`\n`}今天的你，是未来的开拓者
+                    </Text>
+                    <View style={styles.amazingBadge}>
+                        <Text style={styles.amazingBadgeText}>WOW AMAZING~</Text>
+                    </View>
+                    <Image
+                        source={require('@/assets/images/study/小艾拿火炬 1.png')}
+                        style={styles.dailyMascot}
+                        resizeMode="contain"
+                    />
+                    <Image
+                        source={require('@/assets/images/InGatePng/icon21.png')}
+                        style={styles.dailyFlame}
+                        resizeMode="contain"
+                    />
+                </LinearGradient>
+            </Pressable>
+
+            <View style={styles.trainingShortcutRow}>
+                <Pressable
+                    style={({ pressed }) => [
+                        styles.trainingShortcut,
+                        styles.sprintShortcut,
+                        pressed && styles.pressed
+                    ]}
+                >
+                    <View style={styles.shortcutTitleRow}>
+                        <Text style={[styles.shortcutTitle, styles.sprintTitle]}>训练冲刺</Text>
+                        <Image
+                            source={require('@/assets/images/InGatePng/icon24.png')}
+                            style={styles.shortcutIcon}
+                            resizeMode="contain"
+                        />
+                    </View>
+                    <View style={[styles.shortcutButton, styles.sprintButton]}>
+                        <Text style={styles.shortcutButtonText}>开始</Text>
+                    </View>
+                </Pressable>
+
+                <Pressable
+                    style={({ pressed }) => [
+                        styles.trainingShortcut,
+                        styles.summaryShortcut,
+                        pressed && styles.pressed
+                    ]}
+                >
+                    <View style={styles.shortcutTitleRow}>
+                        <Text style={[styles.shortcutTitle, styles.summaryTitle]}>归纳推荐</Text>
+                        <Image
+                            source={require('@/assets/images/InGatePng/icon18.png')}
+                            style={styles.shortcutIcon}
+                            resizeMode="contain"
+                        />
+                    </View>
+                    <View style={[styles.shortcutButton, styles.summaryButton]}>
+                        <Text style={styles.shortcutButtonText}>查看</Text>
+                    </View>
+                </Pressable>
+            </View>
+
+            <Text style={styles.friendSectionTitle}>好友学习记录</Text>
+            <View style={styles.friendList}>
+                {friendRecords.map((friend) => (
+                    <Pressable
+                        key={friend.id}
+                        style={({ pressed }) => [styles.friendCard, pressed && styles.pressed]}
+                    >
+                        <View
+                            style={[
+                                styles.friendAvatarRing,
+                                { backgroundColor: friend.avatarBackground }
+                            ]}
+                        >
+                            <Image
+                                source={friend.avatar}
+                                style={styles.friendAvatar}
+                                resizeMode="contain"
+                            />
+                        </View>
+                        <View style={styles.friendCopy}>
+                            <Text style={styles.friendName}>{friend.name}</Text>
+                            <Text style={styles.friendDetail}>{friend.detail}</Text>
+                        </View>
+                    </Pressable>
+                ))}
+            </View>
         </View>
     );
 }
 
 export default function StudyScreen() {
+    const [mode, setMode] = useState<StudyMode>('training');
+    const [fontsLoaded] = useFonts({ Inter_800ExtraBold });
+
     return (
         <View style={styles.screen}>
             <Image
@@ -317,19 +702,40 @@ export default function StudyScreen() {
                     contentContainerStyle={styles.scrollContent}
                 >
                     <View style={styles.modeTabs}>
-                        <Pressable style={styles.modeTab}>
+                        <Pressable
+                            style={styles.modeTab}
+                            onPress={() => setMode('video')}
+                        >
                             <Text
-                                style={[styles.modeText, styles.modeTextActive]}
+                                style={[
+                                    styles.modeText,
+                                    mode === 'video' && styles.modeTextActive
+                                ]}
                             >
                                 视频
                             </Text>
-                            <View style={styles.modeUnderline} />
+                            {mode === 'video' && <View style={styles.modeUnderline} />}
                         </Pressable>
-                        <Pressable style={styles.modeTab}>
-                            <Text style={styles.modeText}>训练</Text>
+                        <Pressable
+                            style={styles.modeTab}
+                            onPress={() => setMode('training')}
+                        >
+                            <Text
+                                style={[
+                                    styles.modeText,
+                                    mode === 'training' && styles.modeTextActive
+                                ]}
+                            >
+                                训练
+                            </Text>
+                            {mode === 'training' && <View style={styles.modeUnderline} />}
                         </Pressable>
                     </View>
 
+                    {mode === 'training' ? (
+                        <TrainingHomeContent interLoaded={fontsLoaded} />
+                    ) : (
+                        <>
                     <View style={styles.searchRow}>
                         <View style={styles.searchBox}>
                             <Image
@@ -460,6 +866,8 @@ export default function StudyScreen() {
                             </Text>
                         </View>
                     </Pressable>
+                        </>
+                    )}
                 </ScrollView>
             </SafeAreaView>
         </View>
@@ -488,22 +896,23 @@ const styles = StyleSheet.create({
         maxWidth: 440,
         alignSelf: 'center',
         paddingHorizontal: 20,
-        paddingTop: 8,
+        paddingTop: 109,
         paddingBottom: 124
     },
     modeTabs: {
         flexDirection: 'row',
         alignItems: 'flex-start',
-        gap: 24
+        gap: 24,
+        top: -40
     },
     modeTab: {
         minHeight: 36,
-        alignItems: 'center'
+        alignItems: 'center',
     },
     modeText: {
         color: '#2D241D',
         fontSize: 20,
-        lineHeight: 26
+        lineHeight: 26,
     },
     modeTextActive: {
         fontWeight: '700'
@@ -700,24 +1109,24 @@ const styles = StyleSheet.create({
         zIndex: 2
     },
     bookQuickImage: {
-        right: -4,
-        bottom: -8,
-        width: 78,
-        height: 78
+        right: 0,
+        bottom: -5,
+        width: 68,
+        height: 68
     },
     courseQuickImage: {
         left: '50%',
-        bottom: -7,
-        width: 84,
-        height: 84,
-        transform: [{ translateX: -42 }]
+        bottom: -5,
+        width: 74,
+        height: 74,
+        transform: [{ translateX: -37 }]
     },
     summaryQuickImage: {
         left: '50%',
-        bottom: -7,
-        width: 78,
-        height: 78,
-        transform: [{ translateX: -39 }]
+        bottom: -5,
+        width: 70,
+        height: 70,
+        transform: [{ translateX: -35 }]
     },
     quickBadge: {
         position: 'absolute',
@@ -727,27 +1136,14 @@ const styles = StyleSheet.create({
         width: 43,
         height: 52
     },
-    quickWave: {
+    quickWaves: {
         position: 'absolute',
-        right: -14,
-        left: -14,
+        left: -8,
+        bottom: -2,
         zIndex: 0,
-        fontSize: 42,
-        lineHeight: 42,
-        fontWeight: '900',
-        letterSpacing: 10,
-        textAlign: 'center',
-        opacity: 1,
-        transform: [{ scaleX: 1.25 }, { scaleY: 0.5 }, { rotate: '-3deg' }]
-    },
-    quickWaveOne: {
-        bottom: -11
-    },
-    quickWaveTwo: {
-        bottom: 0
-    },
-    quickWaveThree: {
-        bottom: 11
+        width: '115%',
+        height: 46,
+        transform: [{ rotate: '-3deg' }]
     },
     sectionTitleRow: {
         flexDirection: 'row',
@@ -799,8 +1195,7 @@ const styles = StyleSheet.create({
     videoCaption: {
         paddingHorizontal: 9,
         paddingTop: 20,
-        paddingBottom: 7,
-        backgroundColor: 'rgba(31, 26, 22, 0.60)'
+        paddingBottom: 7
     },
     videoTitle: {
         color: '#FFFFFF',
@@ -834,7 +1229,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 14,
         paddingVertical: 12,
         borderRadius: 14,
-        backgroundColor: '#FFE7CD',
+        overflow: 'hidden',
         boxShadow: '0 4px 10px rgba(116, 73, 38, 0.08)'
     },
     rankingHeader: {
@@ -915,6 +1310,391 @@ const styles = StyleSheet.create({
     featuredSubtitle: {
         marginTop: 4,
         color: '#8B7564',
+        fontSize: 11
+    },
+    trainingContent: {
+        marginTop: 10
+    },
+    trainingBoard: {
+        position: 'relative',
+        width: '100%',
+        height: 174
+    },
+    trainingTile: {
+        position: 'absolute',
+        overflow: 'visible',
+        borderRadius: 12
+    },
+    trapezoidBackground: {
+        position: 'absolute',
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: 0,
+        width: '100%',
+        height: '100%'
+    },
+    trainingTrophyMascot: {
+        position: 'absolute',
+        top: -50,
+        right: 70,
+        zIndex: 10,
+        width: 58,
+        height: 58
+    },
+    challengeTile: {
+        top: 0,
+        left: 0,
+        zIndex: 2,
+        width: '56%',
+        height: 104
+    },
+    outlinedTextLayer: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%'
+    },
+    outlinedTextFill: {
+        color: '#FFFFFF'
+    },
+    challengeTitleGraphic: {
+        position: 'absolute',
+        top: -20,
+        left: 12,
+        zIndex: 5,
+        width: 160,
+        height: 40
+    },
+    challengeTitle: {
+        fontSize: 22,
+        lineHeight: 36,
+        fontWeight: '900',
+        letterSpacing: -1
+    },
+    challengeDescription: {
+        position: 'absolute',
+        top: 22,
+        left: 13,
+        width: '84%',
+        color: '#FFFFFF',
+        fontSize: 14,
+        lineHeight: 20
+    },
+    challengeButton: {
+        position: 'absolute',
+        left: 15,
+        bottom: 19,
+        width: 66,
+        height: 25,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: 13,
+        backgroundColor: '#CFEFFF'
+    },
+    challengeButtonText: {
+        color: '#FF7163',
+        fontSize: 16,
+        fontWeight: '700'
+    },
+    challengeButtonArrow: {
+        marginLeft: 4,
+        color: '#FF7163',
+        fontSize: 18,
+        lineHeight: 18
+    },
+    pointsTile: {
+        top: 0,
+        right: 0,
+        width: '48%',
+        height: 52,
+        paddingHorizontal: 0,
+        paddingTop: 0
+    },
+    pointsTitle: {
+        fontSize: 20,
+        lineHeight: 28,
+        fontWeight: '800',
+        letterSpacing: -0.5
+    },
+    pointsTitleGraphic: {
+        position: 'absolute',
+        top: 6,
+        left: 29,
+        zIndex: 5,
+        width: 125,
+        height: 31
+    },
+    pointsCloud: {
+        position: 'absolute',
+        left: -5,
+        bottom: -4,
+        width: 52,
+        height: 36
+    },
+    pointsBubbleOne: {
+        position: 'absolute',
+        right: 18,
+        top: -5,
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        backgroundColor: 'rgba(132, 190, 240, 0.25)'
+    },
+    pointsBubbleTwo: {
+        position: 'absolute',
+        right: -4,
+        bottom: -9,
+        width: 42,
+        height: 42,
+        borderRadius: 21,
+        backgroundColor: 'rgba(132, 190, 240, 0.22)'
+    },
+    paperTile: {
+        top: 112,
+        left: 0,
+        width: '47%',
+        height: 52,
+        flexDirection: 'row',
+        alignItems: 'center'
+    },
+    paperTileIcon: {
+        width: 38,
+        height: 38,
+        marginLeft: 8,
+        marginRight: 6
+    },
+    paperTitleGraphic: {
+        width: 100,
+        height: 31
+    },
+    paperTileText: {
+        fontSize: 18,
+        lineHeight: 27,
+        fontWeight: '800'
+    },
+    mockTile: {
+        top: 60,
+        right: 0,
+        zIndex: 3,
+        width: '55%',
+        height: 104,
+        padding: 0
+    },
+    mockDescription: {
+        position: 'absolute',
+        top: 18,
+        left: 37,
+        width: '72%',
+        color: '#FFFFFF',
+        fontSize: 14,
+        lineHeight: 21
+    },
+    mockStartButton: {
+        position: 'absolute',
+        right: 20,
+        bottom: 42,
+        width: 76,
+        height: 31,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: 14,
+        backgroundColor: '#FFF5D4'
+    },
+    mockStartText: {
+        color: '#C96CDB',
+        fontSize: 16,
+        fontWeight: '700'
+    },
+    mockTitleGraphic: {
+        position: 'absolute',
+        right: -2,
+        bottom: 0,
+        zIndex: 5,
+        width: 158,
+        height: 42
+    },
+    mockTitle: {
+        fontSize: 22,
+        lineHeight: 36,
+        fontWeight: '800',
+        textAlign: 'center'
+    },
+    mockTitleInter: {
+        fontFamily: 'Inter_800ExtraBold'
+    },
+    dailyChallenge: {
+        height: 130,
+        marginTop: 20,
+        borderRadius: 13,
+        overflow: 'hidden',
+        boxShadow: '0 5px 12px rgba(180, 83, 57, 0.12)'
+    },
+    dailyChallengeGradient: {
+        flex: 1,
+        paddingHorizontal: 16,
+        paddingTop: 20
+    },
+    dailyChallengeText: {
+        zIndex: 3,
+        width: '66%',
+        color: '#FFFFFF',
+        fontSize: 12,
+        lineHeight: 18,
+        fontWeight: '700'
+    },
+    amazingBadge: {
+        zIndex: 3,
+        width: 142,
+        height: 22,
+        marginTop: 10,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: 12,
+        backgroundColor: '#8F471E'
+    },
+    amazingBadgeText: {
+        color: '#FFFFFF',
+        fontSize: 12,
+        fontWeight: '800'
+    },
+    dailyCheckerTop: {
+        position: 'absolute',
+        top: 7,
+        right: 4,
+        width: 102,
+        height: 11,
+        opacity: 0.95
+    },
+    dailyCheckerBottom: {
+        position: 'absolute',
+        left: 0,
+        bottom: 3,
+        width: 103,
+        height: 11,
+        opacity: 0.95
+    },
+    dailyMascot: {
+        position: 'absolute',
+        left: '52.8%',
+        top: 10,
+        zIndex: 2,
+        width: 118,
+        height: 118
+    },
+    dailyFlame: {
+        position: 'absolute',
+        right: -4,
+        bottom: -8,
+        zIndex: 1,
+        width: 78,
+        height: 104,
+        opacity: 1
+    },
+    trainingShortcutRow: {
+        flexDirection: 'row',
+        gap: 10,
+        marginTop: 10
+    },
+    trainingShortcut: {
+        flex: 1,
+        height: 68,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 17,
+        overflow: 'hidden'
+    },
+    sprintShortcut: {
+        backgroundColor: '#E2F8C9'
+    },
+    summaryShortcut: {
+        backgroundColor: '#FFE0B7'
+    },
+    shortcutTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center'
+    },
+    shortcutTitle: {
+        fontSize: 16,
+        fontWeight: '800'
+    },
+    sprintTitle: {
+        color: '#8EB84E'
+    },
+    summaryTitle: {
+        color: '#E87B3D'
+    },
+    shortcutIcon: {
+        width: 20,
+        height: 20,
+        marginLeft: 5,
+        opacity: 0.72
+    },
+    shortcutButton: {
+        width: 54,
+        height: 21,
+        marginTop: 5,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: 11
+    },
+    sprintButton: {
+        backgroundColor: '#9CC94C'
+    },
+    summaryButton: {
+        backgroundColor: '#F29B5A'
+    },
+    shortcutButtonText: {
+        color: '#FFE7CD',
+        fontSize: 11,
+        fontWeight: '600'
+    },
+    friendSectionTitle: {
+        marginTop: 18,
+        marginBottom: 9,
+        color: '#241F1B',
+        fontSize: 15,
+        fontWeight: '500'
+    },
+    friendList: {
+        gap: 10
+    },
+    friendCard: {
+        height: 74,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 9,
+        borderTopLeftRadius: 37,
+        borderBottomLeftRadius: 37,
+        borderTopRightRadius: 13,
+        borderBottomRightRadius: 13,
+        backgroundColor: 'rgba(255, 255, 255, 0.92)',
+        boxShadow: '0 4px 11px rgba(100, 68, 40, 0.07)'
+    },
+    friendAvatarRing: {
+        width: 58,
+        height: 58,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: 29
+    },
+    friendAvatar: {
+        width: 51,
+        height: 51
+    },
+    friendCopy: {
+        flex: 1,
+        marginLeft: 12
+    },
+    friendName: {
+        color: '#231F1B',
+        fontSize: 13,
+        fontWeight: '600'
+    },
+    friendDetail: {
+        marginTop: 8,
+        color: '#B66128',
         fontSize: 11
     },
     pressed: {
