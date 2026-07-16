@@ -1,8 +1,13 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
-import { useEffect, useRef, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  AccessibilityInfo,
+  Animated,
   Image,
   ImageSourcePropType,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,7 +17,46 @@ import {
 } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
 
+import { getCurrentUser } from "@/lib/auth-api";
+import { getLatestExamPlan, type ExamPlan } from "@/lib/exam-plan-api";
+import { MOOD_STORAGE_KEY, MoodId, parseStoredMood } from "@/lib/mood";
+import {
+  getTodayTaskDashboard,
+  type TodayTaskDashboard,
+} from "@/lib/today-task-api";
+
 const DESIGN_WIDTH = 402;
+const RECOMMENDATION_CARD_WIDTH = 205;
+const RECOMMENDATION_CARD_GAP = 34;
+const RECOMMENDATION_SNAP_INTERVAL =
+  RECOMMENDATION_CARD_WIDTH + RECOMMENDATION_CARD_GAP;
+
+const GOAL_QUOTES = [
+  {
+    text: "计划是行动的蓝图，没有精心绘制的蓝图，行动就会迷失方向。",
+    author: "雷军",
+  },
+  {
+    text: "凡事预则立，不预则废。",
+    author: "《礼记》",
+  },
+  {
+    text: "不积跬步，无以至千里；不积小流，无以成江海。",
+    author: "荀子",
+  },
+  {
+    text: "知之者不如好之者，好之者不如乐之者。",
+    author: "孔子",
+  },
+  {
+    text: "业精于勤，荒于嬉；行成于思，毁于随。",
+    author: "韩愈",
+  },
+  {
+    text: "日日行，不怕千万里；常常做，不怕千万事。",
+    author: "金缨",
+  },
+] as const;
 
 type PlanMode = "ai" | "goal";
 
@@ -88,33 +132,159 @@ function TopModeTabs({
   );
 }
 
-function RecommendationCard({ item }: { item: Recommendation }) {
+function RecommendationCard({
+  item,
+  onPress,
+}: {
+  item: Recommendation;
+  onPress?: () => void;
+}) {
   return (
-    <LinearGradient
-      colors={item.colors}
-      start={{ x: 0.5, y: 0 }}
-      end={{ x: 0.5, y: 1 }}
-      style={styles.recommendationCard}
+    <Pressable
+      accessibilityRole={onPress ? "button" : undefined}
+      disabled={!onPress}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.recommendationPressable,
+        pressed && styles.pressed,
+      ]}
     >
-      <Text style={styles.recommendationTitle}>{item.title}</Text>
-      <Image
-        source={item.image}
-        style={styles.recommendationImage}
-        resizeMode="contain"
-      />
-      <Text style={styles.recommendationDescription}>{item.description}</Text>
-      <View style={styles.decorativeCircleLarge} />
-      <View style={styles.decorativeCircleSmall} />
-    </LinearGradient>
+      <LinearGradient
+        colors={item.colors}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={styles.recommendationCard}
+      >
+        <Text style={styles.recommendationTitle}>{item.title}</Text>
+        <Image
+          source={item.image}
+          style={styles.recommendationImage}
+          resizeMode="contain"
+        />
+        <Text style={styles.recommendationDescription}>{item.description}</Text>
+        <View style={styles.decorativeCircleLarge} />
+        <View style={styles.decorativeCircleSmall} />
+      </LinearGradient>
+    </Pressable>
   );
 }
 
-function AiPlanningPage() {
+const moodCards: Record<
+  MoodId,
+  { front: ImageSourcePropType; back: ImageSourcePropType }
+> = {
+  happy: {
+    front: require("@/assets/images/mood/cards/happy-front.png"),
+    back: require("@/assets/images/mood/cards/happy-back.png"),
+  },
+  annoyed: {
+    front: require("@/assets/images/mood/cards/annoyed-front.png"),
+    back: require("@/assets/images/mood/cards/annoyed-back.png"),
+  },
+  calm: {
+    front: require("@/assets/images/mood/cards/calm-front.png"),
+    back: require("@/assets/images/mood/cards/calm-back.png"),
+  },
+  tired: {
+    front: require("@/assets/images/mood/cards/tired-front.png"),
+    back: require("@/assets/images/mood/cards/tired-back.png"),
+  },
+};
+
+function MoodFlipCard({ moodId }: { moodId: MoodId }) {
+  const [flipped, setFlipped] = useState(false);
+  const [flipValue] = useState(() => new Animated.Value(0));
+  const card = moodCards[moodId];
+  const frontRotation = flipValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "180deg"],
+  });
+  const backRotation = flipValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["180deg", "360deg"],
+  });
+
+  function toggleCard() {
+    const nextFlipped = !flipped;
+    setFlipped(nextFlipped);
+    Animated.spring(flipValue, {
+      toValue: nextFlipped ? 1 : 0,
+      friction: 8,
+      tension: 65,
+      useNativeDriver: true,
+    }).start();
+  }
+
+  return (
+    <Pressable
+      accessibilityHint="翻转查看心情卡片的另一面"
+      accessibilityLabel="今日心情行动卡片"
+      onPress={toggleCard}
+      style={styles.moodCard}
+    >
+      <Animated.View
+        style={[
+          styles.moodCardSide,
+          { transform: [{ perspective: 1000 }, { rotateY: frontRotation }] },
+        ]}
+      >
+        <Image
+          source={card.front}
+          resizeMode="stretch"
+          style={styles.moodCardImage}
+        />
+      </Animated.View>
+      <Animated.View
+        style={[
+          styles.moodCardSide,
+          { transform: [{ perspective: 1000 }, { rotateY: backRotation }] },
+        ]}
+      >
+        <Image
+          source={card.back}
+          resizeMode="stretch"
+          style={styles.moodCardImage}
+        />
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+function AiPlanningPage({
+  moodId,
+  pageWidth,
+}: {
+  moodId: MoodId;
+  pageWidth: number;
+}) {
   const recommendationRef = useRef<ScrollView>(null);
+  const [recommendationScrollX] = useState(
+    () => new Animated.Value(RECOMMENDATION_SNAP_INTERVAL),
+  );
+  const [reduceMotionEnabled, setReduceMotionEnabled] = useState(false);
+  const router = useRouter();
+
+  const recommendationSidePadding = Math.max(
+    0,
+    (pageWidth - RECOMMENDATION_CARD_WIDTH) / 2,
+  );
+
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotionEnabled);
+    const subscription = AccessibilityInfo.addEventListener(
+      "reduceMotionChanged",
+      setReduceMotionEnabled,
+    );
+
+    return () => subscription.remove();
+  }, []);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
-      recommendationRef.current?.scrollTo({ x: 138, animated: false });
+      recommendationRef.current?.scrollTo({
+        x: RECOMMENDATION_SNAP_INTERVAL,
+        animated: false,
+      });
     });
 
     return () => cancelAnimationFrame(frame);
@@ -122,13 +292,10 @@ function AiPlanningPage() {
 
   return (
     <>
-      <Image
-        source={require("@/assets/images/plan/ai-banner.png")}
-        style={styles.aiBanner}
-        resizeMode="stretch"
-      />
+      <MoodFlipCard key={moodId} moodId={moodId} />
 
       <Pressable
+        onPress={() => router.push("/mood")}
         style={({ pressed }) => [
           styles.switchButton,
           pressed && styles.pressed,
@@ -139,18 +306,73 @@ function AiPlanningPage() {
 
       <Text style={styles.learningTitle}>学习推荐</Text>
 
-      <ScrollView
+      <Animated.ScrollView
         ref={recommendationRef}
         horizontal
         showsHorizontalScrollIndicator={false}
-        snapToInterval={239}
+        snapToInterval={RECOMMENDATION_SNAP_INTERVAL}
+        snapToAlignment="start"
+        disableIntervalMomentum
         decelerationRate="fast"
-        contentContainerStyle={styles.recommendationContent}
+        scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [
+            {
+              nativeEvent: {
+                contentOffset: { x: recommendationScrollX },
+              },
+            },
+          ],
+          { useNativeDriver: Platform.OS !== "web" },
+        )}
+        contentContainerStyle={[
+          styles.recommendationContent,
+          { paddingHorizontal: recommendationSidePadding },
+        ]}
       >
-        {recommendations.map((item) => (
-          <RecommendationCard key={item.id} item={item} />
-        ))}
-      </ScrollView>
+        {recommendations.map((item, index) => {
+          const cardCenterOffset = index * RECOMMENDATION_SNAP_INTERVAL;
+          const scale = recommendationScrollX.interpolate({
+            inputRange: [
+              cardCenterOffset - RECOMMENDATION_SNAP_INTERVAL,
+              cardCenterOffset,
+              cardCenterOffset + RECOMMENDATION_SNAP_INTERVAL,
+            ],
+            outputRange: reduceMotionEnabled ? [1, 1, 1] : [0.84, 1, 0.84],
+            extrapolate: "clamp",
+          });
+          const rotate = recommendationScrollX.interpolate({
+            inputRange: [
+              cardCenterOffset - RECOMMENDATION_SNAP_INTERVAL,
+              cardCenterOffset,
+              cardCenterOffset + RECOMMENDATION_SNAP_INTERVAL,
+            ],
+            outputRange: reduceMotionEnabled
+              ? ["0deg", "0deg", "0deg"]
+              : ["5deg", "0deg", "-5deg"],
+            extrapolate: "clamp",
+          });
+
+          return (
+            <Animated.View
+              key={item.id}
+              style={[
+                styles.recommendationCardMotion,
+                { transform: [{ rotate }, { scale }] },
+              ]}
+            >
+              <RecommendationCard
+                item={item}
+                onPress={
+                  item.id === "exam"
+                    ? () => router.push("/exam-plan")
+                    : undefined
+                }
+              />
+            </Animated.View>
+          );
+        })}
+      </Animated.ScrollView>
     </>
   );
 }
@@ -264,14 +486,25 @@ function GoalRow({
   title,
   value,
   duration,
+  actions,
 }: {
   title: string;
   value: string;
   duration: string;
+  actions: string[];
 }) {
+  const [expanded, setExpanded] = useState(false);
+
   return (
     <Pressable
-      style={({ pressed }) => [styles.goalRow, pressed && styles.pressed]}
+      accessibilityRole="button"
+      accessibilityState={{ expanded }}
+      onPress={() => setExpanded((current) => !current)}
+      style={({ pressed }) => [
+        styles.goalRow,
+        expanded ? styles.goalRowExpanded : styles.goalRowCollapsed,
+        pressed && styles.pressed,
+      ]}
     >
       <View style={styles.goalRowHeader}>
         <View style={styles.goalRowCopy}>
@@ -281,27 +514,31 @@ function GoalRow({
             <Text style={styles.goalValue}>{value}</Text>
           </View>
         </View>
-        <Text style={styles.goalDetail}>查看详情</Text>
-        <View style={styles.goalChevronUp}>
+        <Text style={styles.goalDetail}>{expanded ? "收起详情" : "查看详情"}</Text>
+        <View style={expanded && styles.goalChevronExpanded}>
           <DownChevron />
         </View>
       </View>
 
-      <View style={styles.goalDivider} />
+      {expanded ? (
+        <>
+          <View style={styles.goalDivider} />
 
-      <View style={styles.goalDetailRow}>
-        <DetailIcon type="time" />
-        <Text style={styles.goalDetailLabel}>时间段</Text>
-        <Text style={styles.goalDetailValue}>{duration}</Text>
-      </View>
+          <View style={styles.goalDetailRow}>
+            <DetailIcon type="time" />
+            <Text style={styles.goalDetailLabel}>时间段</Text>
+            <Text style={styles.goalDetailValue}>{duration}</Text>
+          </View>
 
-      <View style={[styles.goalDetailRow, styles.goalActionRow]}>
-        <DetailIcon type="action" />
-        <Text style={styles.goalDetailLabel}>行动</Text>
-        <Text style={styles.goalActionText}>
-          1.背完所有四级单词{`\n`}2.刷10套四级模拟试卷
-        </Text>
-      </View>
+          <View style={[styles.goalDetailRow, styles.goalActionRow]}>
+            <DetailIcon type="action" />
+            <Text style={styles.goalDetailLabel}>行动</Text>
+            <Text style={styles.goalActionText} numberOfLines={3}>
+              {actions.map((action, index) => `${index + 1}.${action}`).join("\n")}
+            </Text>
+          </View>
+        </>
+      ) : null}
     </Pressable>
   );
 }
@@ -334,18 +571,64 @@ function InfoCard({
 }
 
 function GoalSettingPage() {
+  const router = useRouter();
+  const [username, setUsername] = useState("Jessica");
+  const [examPlan, setExamPlan] = useState<ExamPlan | null>(null);
+  const [todayDashboard, setTodayDashboard] = useState<TodayTaskDashboard | null>(null);
+  const [quoteIndex, setQuoteIndex] = useState(0);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      Promise.allSettled([
+        getCurrentUser(),
+        getTodayTaskDashboard(),
+        getLatestExamPlan(),
+      ]).then(([userResult, dashboardResult, planResult]) => {
+        if (!active) return;
+        if (userResult.status === "fulfilled") {
+          setUsername(userResult.value.username);
+        }
+        setTodayDashboard(
+          dashboardResult.status === "fulfilled" ? dashboardResult.value : null,
+        );
+        setExamPlan(planResult.status === "fulfilled" ? planResult.value : null);
+      });
+      return () => {
+        active = false;
+      };
+    }, []),
+  );
+
+  const todayActions = todayDashboard
+    ? [...todayDashboard.pendingTasks, ...todayDashboard.completedTasks]
+        .slice(0, 3)
+        .map((task) => task.title)
+    : [];
+  const examActions = examPlan?.phases
+    .flatMap((phase) => phase.tasks)
+    .slice(0, 3) ?? [];
+  const quote = GOAL_QUOTES[quoteIndex];
+
+  function changeQuote() {
+    setQuoteIndex((currentIndex) => {
+      const offset = Math.floor(Math.random() * (GOAL_QUOTES.length - 1)) + 1;
+      return (currentIndex + offset) % GOAL_QUOTES.length;
+    });
+  }
+
   return (
     <>
       <View style={styles.greetingArea}>
         <Image
-          source={require("@/assets/images/plan-goal-v2/asset-00.png")}
+          source={require("@/assets/images/plan-goal-v2/Group 1054.png")}
           style={styles.greetingMascot}
           resizeMode="contain"
         />
         <View style={styles.greetingCopy}>
-          <Text style={styles.greetingTitle}>Hi，Jessica</Text>
+          <Text style={styles.greetingTitle}>Hi，{username}</Text>
           <Text style={styles.greetingDescription}>
-            快来设定你的目标吧~{`\n`}3步获取制定计划，提升4倍学习效率
+            快来设定你的目标吧~{`\n`}3步获取制定计划，提升3倍学习效率
           </Text>
         </View>
         <View style={styles.greetingChevrons}>
@@ -363,8 +646,18 @@ function GoalSettingPage() {
         <Text style={styles.goalPanelIntro}>
           小汪根据你的选择为你定制了个性化目标
         </Text>
-        <GoalRow title="短期目标" value="考试" duration="当天" />
-        <GoalRow title="长期目标" value="英语四级" duration="200天" />
+        <GoalRow
+          title="短期目标"
+          value={todayActions.length > 0 ? `今日任务 ${todayActions.length}项` : "今日任务"}
+          duration="当天"
+          actions={todayActions.length > 0 ? todayActions : ["前往今日任务添加学习安排"]}
+        />
+        <GoalRow
+          title="长期目标"
+          value={examPlan?.subject ?? "暂未设置"}
+          duration={examPlan ? `${examPlan.remainingDays}天` : "待设置"}
+          actions={examActions.length > 0 ? examActions : ["创建考试计划后自动生成行动清单"]}
+        />
 
         <LinearGradient
           colors={["#FFFFFF", "#FFD29B", "#FFFFFF"]}
@@ -373,6 +666,7 @@ function GoalSettingPage() {
           style={styles.editGoalButton}
         >
           <Pressable
+            onPress={() => router.push("/exam-plan")}
             style={({ pressed }) => [
               styles.editGoalPressable,
               pressed && styles.pressed,
@@ -384,12 +678,28 @@ function GoalSettingPage() {
       </LinearGradient>
 
       <View style={styles.quoteCard}>
-        <Text style={styles.quoteText}>
-          计划是行动的蓝图，没有精心绘制的蓝图，{`\n`}行动就会迷失方向。
+        <Text style={styles.quoteText} numberOfLines={2}>
+          {quote.text}
         </Text>
         <View style={styles.quoteFooter}>
-          <Text style={styles.refreshText}>⟳ 换一换</Text>
-          <Text style={styles.quoteAuthor}>——雷军</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="换一条名人名言"
+            hitSlop={8}
+            onPress={changeQuote}
+            style={({ pressed }) => [
+              styles.refreshButton,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Image
+              source={require("@/assets/images/fastuse/icon50.png")}
+              style={styles.refreshIcon}
+              resizeMode="contain"
+            />
+            <Text style={styles.refreshText}>换一换</Text>
+          </Pressable>
+          <Text style={styles.quoteAuthor}>——{quote.author}</Text>
         </View>
       </View>
 
@@ -413,6 +723,24 @@ export default function PlanScreen() {
   const { width } = useWindowDimensions();
   const pageWidth = Math.min(width, DESIGN_WIDTH);
   const [mode, setMode] = useState<PlanMode>("ai");
+  const [moodId, setMoodId] = useState<MoodId>("happy");
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+
+      AsyncStorage.getItem(MOOD_STORAGE_KEY).then((value) => {
+        const storedMood = parseStoredMood(value);
+        if (active && storedMood) {
+          setMoodId(storedMood.id);
+        }
+      });
+
+      return () => {
+        active = false;
+      };
+    }, []),
+  );
 
   return (
     <LinearGradient
@@ -428,7 +756,11 @@ export default function PlanScreen() {
       >
         <View style={[styles.page, { width: pageWidth }]}>
           <TopModeTabs mode={mode} onChange={setMode} />
-          {mode === "ai" ? <AiPlanningPage /> : <GoalSettingPage />}
+          {mode === "ai" ? (
+            <AiPlanningPage moodId={moodId} pageWidth={pageWidth} />
+          ) : (
+            <GoalSettingPage />
+          )}
         </View>
       </ScrollView>
     </LinearGradient>
@@ -479,12 +811,26 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: "#111111",
   },
-  aiBanner: {
-    width: "auto",
+  moodCard: {
+    position: "relative",
     height: 212,
     marginTop: 26,
     marginHorizontal: 20,
     borderRadius: 23,
+  },
+  moodCardSide: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    overflow: "hidden",
+    borderRadius: 23,
+    backfaceVisibility: "hidden",
+  },
+  moodCardImage: {
+    width: "100%",
+    height: "100%",
   },
   switchButton: {
     width: 76,
@@ -512,15 +858,23 @@ const styles = StyleSheet.create({
   recommendationContent: {
     height: 296,
     marginTop: 18,
-    gap: 34,
+    gap: RECOMMENDATION_CARD_GAP,
+  },
+  recommendationCardMotion: {
+    width: RECOMMENDATION_CARD_WIDTH,
+    height: 281,
   },
   recommendationCard: {
     position: "relative",
-    width: 205,
+    width: RECOMMENDATION_CARD_WIDTH,
     height: 281,
     overflow: "hidden",
     borderRadius: 22,
     boxShadow: "0 5px 9px rgba(70, 45, 24, 0.18)",
+  },
+  recommendationPressable: {
+    width: RECOMMENDATION_CARD_WIDTH,
+    height: 281,
   },
   recommendationTitle: {
     position: "absolute",
@@ -577,7 +931,7 @@ const styles = StyleSheet.create({
   },
   greetingMascot: {
     position: "absolute",
-    top: 4,
+    top: 16,
     left: 15,
     width: 77,
     height: 77,
@@ -591,7 +945,7 @@ const styles = StyleSheet.create({
   greetingTitle: {
     color: "#111111",
     fontSize: 21,
-    fontWeight: "500",
+    fontWeight: "600",
   },
   greetingDescription: {
     marginTop: 4,
@@ -605,9 +959,10 @@ const styles = StyleSheet.create({
     right: -3,
   },
   goalPanel: {
-    height: 471,
+    minHeight: 270,
     marginHorizontal: 20,
     paddingTop: 15,
+    paddingBottom: 20,
     borderRadius: 24,
   },
   goalPanelIntro: {
@@ -616,13 +971,18 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   goalRow: {
-    height: 165,
     marginTop: 14,
     marginHorizontal: 20,
     paddingHorizontal: 15,
     paddingVertical: 10,
     borderRadius: 8,
     backgroundColor: "rgba(255,255,255,0.88)",
+  },
+  goalRowCollapsed: {
+    height: 68,
+  },
+  goalRowExpanded: {
+    height: 165,
   },
   goalRowHeader: {
     height: 58,
@@ -652,7 +1012,7 @@ const styles = StyleSheet.create({
     color: "#BDBDBD",
     fontSize: 12,
   },
-  goalChevronUp: {
+  goalChevronExpanded: {
     transform: [{ rotate: "180deg" }],
   },
   goalDivider: {
@@ -723,7 +1083,17 @@ const styles = StyleSheet.create({
   quoteFooter: {
     marginTop: 2,
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
+  },
+  refreshButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  refreshIcon: {
+    width: 14,
+    height: 15,
   },
   refreshText: {
     color: "#9B4B22",

@@ -1,7 +1,11 @@
 import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useCallback, useState } from 'react';
 import {
+  Alert,
   Image,
+  ImageSourcePropType,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -9,7 +13,31 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import Svg, { Circle, Ellipse, Line, Path, Rect } from 'react-native-svg';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, {
+  Circle,
+  Ellipse,
+  Line,
+  Path,
+  Rect,
+  Text as SvgText,
+} from 'react-native-svg';
+
+import { getAccountAvatarSource } from '@/lib/account-avatar';
+import { getCurrentUser } from '@/lib/auth-api';
+import {
+  clearAuthSession,
+  getAuthSession,
+  type AuthSession,
+} from '@/lib/auth-session';
+import {
+  getStudyCheckInSummary,
+  type StudyCheckInSummary,
+} from '@/lib/study-check-in-api';
+import {
+  getTodayTaskDashboard,
+  type TodayTaskDashboard,
+} from '@/lib/today-task-api';
 
 const DESIGN_WIDTH = 402;
 const PAGE_BACKGROUND = '#FCF1E4';
@@ -48,19 +76,48 @@ const videoHistory: HistoryItem[] = [
   { title: '26众和法硕', detail: '进度4/9 | 用时16min | 8月11日', progress: 0.5 },
 ];
 
-const shortcuts: { label: string; icon: IconName }[] = [
-  { label: '人物画像', icon: 'user' },
+type Shortcut = {
+  label: string;
+  icon?: IconName;
+  image?: ImageSourcePropType;
+  route?: '/persona';
+};
+
+const shortcuts: Shortcut[] = [
+  {
+    label: '人物画像',
+    image: require('@/assets/images/fastuse/icon30.png'),
+    route: '/persona',
+  },
   { label: '我的收藏', icon: 'star' },
   { label: '错题库', icon: 'close' },
-  { label: '知识归纳', icon: 'book' },
+  {
+    label: '知识归纳',
+    image: require('@/assets/images/fastuse/icon27.png'),
+  },
 ];
 
-const commonActions: { label: string; icon: IconName }[] = [
-  { label: '任务中心', icon: 'puzzle' },
-  { label: '积分兑换', icon: 'coins' },
-  { label: '我的简历', icon: 'cv' },
-  { label: '分享APP', icon: 'share' },
-  { label: '帮助与反馈', icon: 'help' },
+const commonActions: { label: string; image: ImageSourcePropType }[] = [
+  {
+    label: '任务中心',
+    image: require('@/assets/images/fastuse/任务中心.png'),
+  },
+  {
+    label: '积分兑换',
+    image: require('@/assets/images/fastuse/积分兑换.png'),
+  },
+  {
+    label: '我的简历',
+    image: require('@/assets/images/fastuse/我的简历.png'),
+  },
+  {
+    label: '分享APP',
+    image: require('@/assets/images/fastuse/分享APP.png'),
+  },
+  {
+    label: '帮助与反馈',
+    image: require('@/assets/images/fastuse/帮助与反馈.png'),
+  },
 ];
 
 function LineIcon({
@@ -185,8 +242,7 @@ function ProgressRing({ progress }: { progress: number }) {
         stroke="#FFB04F"
         strokeWidth="4"
         strokeDasharray={`${circumference * progress} ${circumference}`}
-        rotation="-90"
-        origin="10, 10"
+        transform="rotate(-90 10 10)"
       />
     </Svg>
   );
@@ -234,17 +290,198 @@ function HistoryCard({
   );
 }
 
+const WEEKDAY_LABELS = ['日', '一', '二', '三', '四', '五', '六'];
+
+function toLocalDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function LearningAnalysisChart({
+  summary,
+  dashboard,
+}: {
+  summary: StudyCheckInSummary | null;
+  dashboard: TodayTaskDashboard | null;
+}) {
+  const today = new Date();
+  const points = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() - (6 - index));
+    const dateKey = toLocalDateKey(date);
+    const checkedIn = summary?.checkedDates.includes(dateKey) ?? false;
+    const todayMinutes = dateKey === toLocalDateKey(today)
+      ? dashboard?.todayStudyMinutes ?? 0
+      : 0;
+    const score = Math.min(100, (checkedIn ? 42 : 8) + Math.min(todayMinutes, 58));
+    return {
+      checkedIn,
+      label: `周${WEEKDAY_LABELS[date.getDay()]}`,
+      score,
+    };
+  });
+  const left = 27;
+  const bottom = 99;
+  const step = 45;
+  const linePath = points
+    .map((point, index) => {
+      const x = left + index * step + 8;
+      const y = bottom - (point.score / 100) * 62;
+      return `${index === 0 ? 'M' : 'L'}${x} ${y}`;
+    })
+    .join(' ');
+
+  return (
+    <View style={styles.analysisContent}>
+      <View style={styles.analysisSummaryRow}>
+        <Text style={styles.analysisSummaryText}>
+          连续 <Text style={styles.analysisStrong}>{summary?.continuousDays ?? 0}</Text> 天
+        </Text>
+        <Text style={styles.analysisSummaryText}>
+          今日 <Text style={styles.analysisStrong}>{dashboard?.todayStudyMinutes ?? 0}</Text> 分钟
+        </Text>
+        <Text style={styles.analysisSummaryText}>
+          累计 <Text style={styles.analysisStrong}>{summary?.totalDays ?? 0}</Text> 次
+        </Text>
+      </View>
+      <Svg width="100%" height={122} viewBox="0 0 342 122">
+        {[37, 68, 99].map((y) => (
+          <Line
+            key={y}
+            x1="20"
+            x2="326"
+            y1={y}
+            y2={y}
+            stroke="#F1DFCB"
+            strokeWidth="1"
+          />
+        ))}
+        {points.map((point, index) => {
+          const height = Math.max(6, (point.score / 100) * 62);
+          const x = left + index * step;
+          return (
+            <Rect
+              key={point.label + index}
+              x={x}
+              y={bottom - height}
+              width="16"
+              height={height}
+              rx="5"
+              fill={point.checkedIn ? '#FF9A25' : '#FFE0B9'}
+            />
+          );
+        })}
+        <Path
+          d={linePath}
+          fill="none"
+          stroke="#686BE9"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        {points.map((point, index) => {
+          const x = left + index * step + 8;
+          const y = bottom - (point.score / 100) * 62;
+          return <Circle key={`dot-${index}`} cx={x} cy={y} r="3" fill="#686BE9" />;
+        })}
+        {points.map((point, index) => (
+          <SvgText
+            key={`label-${index}`}
+            x={left + index * step + 8}
+            y="116"
+            fill="#9A7658"
+            fontSize="9"
+            textAnchor="middle"
+          >
+            {point.label}
+          </SvgText>
+        ))}
+      </Svg>
+    </View>
+  );
+}
+
 export default function ProfileScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const pageWidth = Math.min(width, DESIGN_WIDTH);
   const scale = pageWidth / DESIGN_WIDTH;
+  const tabBarClearance = 94 + Math.max(insets.bottom, 10);
+  const [session, setSession] = useState<AuthSession | null>(null);
+  const [checkInSummary, setCheckInSummary] = useState<StudyCheckInSummary | null>(null);
+  const [todayTaskDashboard, setTodayTaskDashboard] = useState<TodayTaskDashboard | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      void (async () => {
+        const value = await getAuthSession();
+        if (!value) {
+          if (active) {
+            setSession(null);
+            setCheckInSummary(null);
+            setTodayTaskDashboard(null);
+          }
+          return;
+        }
+
+        try {
+          await getCurrentUser();
+          if (!active) return;
+          setSession(value);
+
+          const month = toLocalDateKey(new Date()).slice(0, 7);
+          const [summaryResult, dashboardResult] = await Promise.allSettled([
+            getStudyCheckInSummary(month),
+            getTodayTaskDashboard(),
+          ]);
+          if (!active) return;
+          setCheckInSummary(
+            summaryResult.status === 'fulfilled' ? summaryResult.value : null,
+          );
+          setTodayTaskDashboard(
+            dashboardResult.status === 'fulfilled' ? dashboardResult.value : null,
+          );
+        } catch {
+          if (active) {
+            setSession(null);
+            setCheckInSummary(null);
+            setTodayTaskDashboard(null);
+          }
+        }
+      })();
+      return () => {
+        active = false;
+      };
+    }, []),
+  );
+
+  function handleSettings() {
+    if (!session) return;
+    Alert.alert('退出登录', `确定退出账号 ${session.username} 吗？`, [
+      { text: '取消', style: 'cancel' },
+      {
+        text: '退出',
+        style: 'destructive',
+        onPress: () => {
+          void clearAuthSession().then(() => router.replace('/login'));
+        },
+      },
+    ]);
+  }
 
   return (
     <View style={styles.screen}>
       <StatusBar style="dark" />
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: tabBarClearance },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.page, { width: pageWidth }]}>
@@ -281,7 +518,11 @@ export default function ProfileScreen() {
                 pressed && styles.pressed,
               ]}
             >
-              <LineIcon name="bookmark" size={25} color="#934519" />
+              <Image
+                source={require('@/assets/images/fastuse/icon28.png')}
+                style={{ width: 18 * scale, height: 23 * scale }}
+                resizeMode="contain"
+              />
             </Pressable>
 
             <Image
@@ -299,7 +540,8 @@ export default function ProfileScreen() {
             />
 
             <Pressable
-              accessibilityLabel="设置"
+              accessibilityLabel={session ? "退出登录" : "设置"}
+              onPress={handleSettings}
               style={({ pressed }) => [
                 styles.settingsButton,
                 { right: 17 * scale, top: 42 * scale },
@@ -311,6 +553,9 @@ export default function ProfileScreen() {
 
             <Pressable
               accessibilityLabel="立即登录或注册"
+              onPress={() => {
+                if (!session) router.push('/login');
+              }}
               style={({ pressed }) => [
                 styles.loginCard,
                 {
@@ -322,10 +567,23 @@ export default function ProfileScreen() {
                 pressed && styles.pressed,
               ]}
             >
-              <View style={[styles.avatarPlaceholder, { width: 50 * scale, height: 50 * scale }]}>
-                <LineIcon name="user" size={33 * scale} color="#FFFFFF" />
-              </View>
-              <Text style={[styles.loginText, { fontSize: 18 * scale }]}>立即登录/注册</Text>
+              {session ? (
+                <Image
+                  source={getAccountAvatarSource(session.userId)}
+                  style={[
+                    styles.accountAvatar,
+                    { width: 50 * scale, height: 50 * scale },
+                  ]}
+                  resizeMode="contain"
+                />
+              ) : (
+                <View style={[styles.avatarPlaceholder, { width: 50 * scale, height: 50 * scale }]}>
+                  <LineIcon name="user" size={33 * scale} color="#FFFFFF" />
+                </View>
+              )}
+              <Text style={[styles.loginText, { fontSize: 18 * scale }]}>
+                {session?.username ?? '立即登录/注册'}
+              </Text>
               <Text style={[styles.chevron, { fontSize: 34 * scale }]}>›</Text>
             </Pressable>
           </View>
@@ -340,9 +598,24 @@ export default function ProfileScreen() {
               <Pressable
                 key={shortcut.label}
                 accessibilityLabel={shortcut.label}
+                onPress={() => {
+                  if (shortcut.route) router.push(shortcut.route);
+                }}
                 style={({ pressed }) => [styles.shortcutItem, pressed && styles.pressed]}
               >
-                <LineIcon name={shortcut.icon} size={30} color="#9E4F21" />
+                {shortcut.image ? (
+                  <Image
+                    source={shortcut.image}
+                    resizeMode="contain"
+                    style={styles.shortcutImage}
+                  />
+                ) : (
+                  <LineIcon
+                    name={shortcut.icon ?? 'user'}
+                    size={30}
+                    color="#9E4F21"
+                  />
+                )}
                 <Text style={styles.shortcutLabel}>{shortcut.label}</Text>
               </Pressable>
             ))}
@@ -350,10 +623,9 @@ export default function ProfileScreen() {
 
           <SectionTitle title="学情分析" underlineWidth={72} />
           <View style={styles.chartCard}>
-            <Image
-              source={require('@/assets/images/profile/analysis-chart.png')}
-              style={styles.chartImage}
-              resizeMode="cover"
+            <LearningAnalysisChart
+              summary={checkInSummary}
+              dashboard={todayTaskDashboard}
             />
           </View>
 
@@ -377,7 +649,11 @@ export default function ProfileScreen() {
                 accessibilityLabel={action.label}
                 style={({ pressed }) => [styles.commonRow, pressed && styles.pressed]}
               >
-                <LineIcon name={action.icon} size={25} color="#747474" />
+                <Image
+                  source={action.image}
+                  resizeMode="contain"
+                  style={styles.commonImage}
+                />
                 <Text style={styles.commonLabel}>{action.label}</Text>
                 <Text style={styles.commonChevron}>›</Text>
                 {index < commonActions.length - 1 ? <View style={styles.commonDivider} /> : null}
@@ -413,7 +689,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     alignItems: 'center',
-    paddingBottom: 118,
   },
   page: {
     backgroundColor: PAGE_BACKGROUND,
@@ -459,6 +734,12 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: '#9A9A9A',
   },
+  accountAvatar: {
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    backgroundColor: '#FFEEDB',
+  },
   loginText: {
     marginLeft: 15,
     color: '#161616',
@@ -482,6 +763,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: 5,
+  },
+  shortcutImage: {
+    width: 40,
+    height: 30,
   },
   shortcutLabel: {
     color: '#191919',
@@ -517,9 +802,24 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     backgroundColor: '#FFFFFF',
   },
-  chartImage: {
-    width: '100%',
-    height: '100%',
+  analysisContent: {
+    flex: 1,
+    paddingHorizontal: 10,
+    paddingTop: 12,
+  },
+  analysisSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+  },
+  analysisSummaryText: {
+    color: '#8C6A4E',
+    fontSize: 11,
+  },
+  analysisStrong: {
+    color: '#E77D18',
+    fontSize: 15,
+    fontWeight: '700',
   },
   historyContent: {
     gap: 20,
@@ -592,6 +892,10 @@ const styles = StyleSheet.create({
     color: '#222222',
     fontSize: 15,
     fontWeight: '500',
+  },
+  commonImage: {
+    width: 25,
+    height: 25,
   },
   commonChevron: {
     marginLeft: 'auto',

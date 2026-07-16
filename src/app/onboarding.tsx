@@ -34,24 +34,24 @@ const introPages: IntroPage[] = [
     {
         id: 'analysis',
         type: 'intro',
-        title: '个性化分析',
-        description: '分析你的学习情况，制定合适的学习方案',
+        title: 'Sync Study',
+        description: 'AI智能分析你的学习习惯，为你量身推荐专属内容。',
         image: require('@/assets/images/welcome_facing/icon1.png'),
         backgroundColor: '#C6E5FF'
     },
   {
     id: 'companion',
         type: 'intro',
-        title: '陪伴学习',
-        description: '和你的学习搭子一起快乐成长',
+        title: 'Sync Study',
+        description: '你的专属学习伴侣随时待命！进步路上不孤单。',
         image: require('@/assets/images/welcome_facing/icon2.png'),
     backgroundColor: '#FFC5BE'
     },
   {
     id: 'mobile',
         type: 'intro',
-        title: '移动便捷',
-        description: '随时随地开启你的学习计划',
+        title: 'Sync Study',
+        description: '移动学习新体验，融入生活的每一刻，便捷反馈一路相伴~',
         image: require('@/assets/images/welcome_facing/icon3.png'),
     backgroundColor: '#FFD9AB'
     }
@@ -92,6 +92,9 @@ export default function OnboardingScreen() {
             return <RoleSelectionPage width={width} height={height} />;
         }
 
+        const illustrationWidth = width * (350 / 402);
+        const illustrationHeight = illustrationWidth * (417 / 350);
+
         return (
             <View
                 style={[
@@ -110,7 +113,17 @@ export default function OnboardingScreen() {
                     <Text style={styles.skipText}>跳过</Text>
                 </Pressable>
 
-                <View style={styles.illustrationArea}>
+                <View
+                    style={[
+                        styles.illustrationArea,
+                        {
+                            top: height * (166 / 874),
+                            left: (width - illustrationWidth) / 2,
+                            width: illustrationWidth,
+                            height: illustrationHeight
+                        }
+                    ]}
+                >
                     <Image
                         source={item.image}
                         style={styles.introImage}
@@ -118,10 +131,26 @@ export default function OnboardingScreen() {
                     />
                 </View>
 
-                <Text style={styles.introTitle}>{item.title}</Text>
-                <Text style={styles.introDescription}>{item.description}</Text>
+                <View
+                    style={[
+                        styles.introCopy,
+                        {
+                            top: height * (584 / 874),
+                            left: width * (38 / 402),
+                            right: width * (38 / 402)
+                        }
+                    ]}
+                >
+                    <Text style={styles.introTitle}>{item.title}</Text>
+                    <Text style={styles.introDescription}>{item.description}</Text>
+                </View>
 
-                <View style={styles.pagination}>
+                <View
+                    style={[
+                        styles.pagination,
+                        { top: height * (746 / 874) }
+                    ]}
+                >
                     {introPages.map((page, index) => (
                         <View
                             key={page.id}
@@ -141,8 +170,12 @@ export default function OnboardingScreen() {
             ref={listRef}
             style={styles.list}
             data={pages}
+            extraData={currentIndex}
             renderItem={renderPage}
             keyExtractor={(item) => item.id}
+            initialNumToRender={pages.length}
+            maxToRenderPerBatch={pages.length}
+            windowSize={pages.length}
             horizontal
             pagingEnabled
             bounces={false}
@@ -256,9 +289,7 @@ const styles = StyleSheet.create({
     introPage: {
         flex: 1,
         alignItems: 'center',
-        paddingTop: 60,
-        paddingHorizontal: 24,
-        paddingBottom: 42
+        position: 'relative'
     },
     skipButton: {
         position: 'absolute',
@@ -271,7 +302,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         borderRadius: 18,
-        backgroundColor: 'rgba(255, 255, 255, 0.45)'
+        backgroundColor: 'rgba(255, 255, 255, 0)'
     },
     skipText: {
         color: '#000000',
@@ -279,45 +310,47 @@ const styles = StyleSheet.create({
         fontWeight: '300'
     },
     illustrationArea: {
-        flex: 1,
-        width: '100%',
+        position: 'absolute',
         alignItems: 'center',
         justifyContent: 'center'
     },
     introImage: {
-        width: '88%',
-        height: '88%',
-        maxWidth: 360,
-        maxHeight: 430
+        width: '100%',
+        height: '100%'
+    },
+    introCopy: {
+        position: 'absolute'
     },
     introTitle: {
-        color: '#FF8D00',
-        fontSize: 28,
+        color: '#FFFFFF',
+        fontSize: 35,
+        lineHeight: 38,
         fontWeight: '700',
         textAlign: 'center'
     },
     introDescription: {
-        minHeight: 48,
-        marginTop: 12,
-        paddingHorizontal: 16,
-        color: '#6F625A',
-        fontSize: 16,
-        lineHeight: 24,
-        textAlign: 'center'
+        marginTop: 6,
+        color: '#FFFFFF',
+        fontSize: 20,
+        lineHeight: 27,
+        fontWeight: '600',
+        textAlign: 'left'
     },
     pagination: {
-        height: 18,
-        marginTop: 28,
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        height: 10,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 10
+        gap: 20
     },
     dot: {
         width: 9,
         height: 9,
         borderRadius: 5,
-        backgroundColor: '#E1D5CC'
+        backgroundColor: '#FFFFFF'
     },
     activeDot: {
         backgroundColor: '#FF8D00'

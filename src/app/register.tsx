@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Image,
   ImageBackground,
@@ -16,6 +17,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { registerAccount } from '@/lib/auth-api';
 
 type FormInputProps = {
   icon: ImageSourcePropType;
@@ -86,13 +89,16 @@ export default function RegisterScreen() {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
   const [agreed, setAgreed] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const hasRequiredValues =
     account.trim().length > 0 && password.length > 0 && confirmPassword.length > 0;
   const passwordsMatch = password === confirmPassword;
-  const canRegister = hasRequiredValues && passwordsMatch && agreed;
+  const credentialsValid = account.trim().length >= 4 && password.length >= 6;
+  const canRegister =
+    hasRequiredValues && credentialsValid && passwordsMatch && agreed && !loading;
 
-  function handleRegister() {
+  async function handleRegister() {
     if (!hasRequiredValues) {
       Alert.alert('信息未填写完整', '请填写账号、密码并再次确认密码。');
       return;
@@ -103,17 +109,36 @@ export default function RegisterScreen() {
       return;
     }
 
+    if (!credentialsValid) {
+      Alert.alert('账号或密码过短', '账号至少 4 位，密码至少 6 位。');
+      return;
+    }
+
     if (!agreed) {
       Alert.alert('请勾选协议', '注册前需要阅读并同意用户协议与隐私授权。');
       return;
     }
 
-    Alert.alert('注册成功', '当前为前端演示，账号还没有提交到后端。', [
-      {
-        text: '去登录',
-        onPress: () => router.replace('/login'),
-      },
-    ]);
+    setLoading(true);
+    try {
+      await registerAccount({
+        username: account.trim(),
+        password,
+      });
+      Alert.alert('注册成功', '接下来通过五个步骤构建你的专属人物画像。', [
+        {
+          text: '开始构建',
+          onPress: () => router.replace('/persona-builder'),
+        },
+      ]);
+    } catch (error) {
+      Alert.alert(
+        '注册失败',
+        error instanceof Error ? error.message : '请稍后重试',
+      );
+    } finally {
+      setLoading(false);
+    }
   }
 
   function showPendingFeature(title: string) {
@@ -204,19 +229,24 @@ export default function RegisterScreen() {
                   />
 
                   <Pressable
+                    disabled={loading}
                     onPress={handleRegister}
                     style={({ pressed }) => [
                       styles.registerButton,
                       canRegister && styles.registerButtonEnabled,
                       pressed && styles.pressed,
                     ]}>
-                    <Text
-                      style={[
-                        styles.registerButtonText,
-                        canRegister && styles.registerButtonTextEnabled,
-                      ]}>
-                      注册
-                    </Text>
+                    {loading ? (
+                      <ActivityIndicator color="#76401E" size="small" />
+                    ) : (
+                      <Text
+                        style={[
+                          styles.registerButtonText,
+                          canRegister && styles.registerButtonTextEnabled,
+                        ]}>
+                        注册
+                      </Text>
+                    )}
                   </Pressable>
 
                   <Pressable
@@ -320,7 +350,7 @@ const styles = StyleSheet.create({
   },
   welcomeCopy: {
     position: 'absolute',
-    left: 24,
+    left: 20,
     top: 86,
     zIndex: 2,
   },
@@ -346,6 +376,7 @@ const styles = StyleSheet.create({
   },
   card: {
     flex: 1,
+    marginHorizontal: 20,
     overflow: 'hidden',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,

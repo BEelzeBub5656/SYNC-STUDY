@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Tabs, useRouter } from "expo-router";
 import type { ComponentProps } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Animated,
   Image,
@@ -17,13 +17,14 @@ import {
   NewbieTaskModal,
   NewbieTaskRoute,
 } from "@/components/newbie-task-modal";
+import { getAuthSession } from "@/lib/auth-session";
 
 const TAB_BAR_HEIGHT = 94;
 const TAB_BAR_MAX_WIDTH = 404;
 const TAB_BAR_SIDE_MARGIN = 10;
 const CENTER_MASCOT_SIZE = 55;
 const ACTIVE_BUBBLE_SIZE = 74;
-const NEWBIE_GUIDE_SEEN_KEY = "newbie-guide-seen-v1";
+const NEWBIE_GUIDE_SEEN_KEY_PREFIX = "newbie-guide-seen-v3";
 
 type TabsProps = ComponentProps<typeof Tabs>;
 type AnimatedTabBarProps = Parameters<NonNullable<TabsProps["tabBar"]>>[0];
@@ -82,7 +83,7 @@ function AnimatedTabBar({
 }: GuidedTabBarProps) {
   const { width } = useWindowDimensions();
   const [animatedIndex] = useState(() => new Animated.Value(state.index));
-  const aiShake = useRef(new Animated.Value(0)).current;
+  const [aiShake] = useState(() => new Animated.Value(0));
   const tabBarWidth = Math.min(
     width - TAB_BAR_SIDE_MARGIN * 2,
     TAB_BAR_MAX_WIDTH,
@@ -281,11 +282,19 @@ export default function TabsLayout() {
   const router = useRouter();
   const [showNewbieGreeting, setShowNewbieGreeting] = useState(false);
   const [showNewbieTasks, setShowNewbieTasks] = useState(false);
+  const [newbieGuideSeenKey, setNewbieGuideSeenKey] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
 
-    AsyncStorage.getItem(NEWBIE_GUIDE_SEEN_KEY)
+    getAuthSession()
+      .then((session) => {
+        const storageKey = `${NEWBIE_GUIDE_SEEN_KEY_PREFIX}:${session?.userId ?? "guest"}`;
+        if (mounted) {
+          setNewbieGuideSeenKey(storageKey);
+        }
+        return AsyncStorage.getItem(storageKey);
+      })
       .then((seen) => {
         if (mounted && seen !== "true") {
           setShowNewbieGreeting(true);
@@ -308,7 +317,9 @@ export default function TabsLayout() {
   }
 
   function rememberGuideSeen() {
-    void AsyncStorage.setItem(NEWBIE_GUIDE_SEEN_KEY, "true");
+    if (newbieGuideSeenKey) {
+      void AsyncStorage.setItem(newbieGuideSeenKey, "true");
+    }
   }
 
   function dismissNewbieTasks() {

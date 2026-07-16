@@ -17,9 +17,8 @@ const DESIGN_WIDTH = 402;
 type CommunityCategory = {
   id: string;
   label: string;
-  watermark: string;
+  watermarkImage: ImageSourcePropType;
   backgroundColor: string;
-  accentColor: string;
   image: ImageSourcePropType;
   top: number;
 };
@@ -28,36 +27,32 @@ const categories: CommunityCategory[] = [
   {
     id: "buddy",
     label: "我的搭子",
-    watermark: "子",
+    watermarkImage: require("@/assets/images/fastuse/我的搭子背景.png"),
     backgroundColor: "#FBE8ED",
-    accentColor: "#C9A9E8",
     image: require("@/assets/images/community/asset-12.png"),
     top: 5,
   },
   {
     id: "study-room",
     label: "自习室",
-    watermark: "室",
+    watermarkImage: require("@/assets/images/fastuse/自习室背景.png"),
     backgroundColor: "#E8F5FD",
-    accentColor: "#A8D8F7",
     image: require("@/assets/images/community/asset-00.png"),
     top: 30,
   },
   {
     id: "career",
     label: "职通车",
-    watermark: "车",
+    watermarkImage: require("@/assets/images/fastuse/职通车背景.png"),
     backgroundColor: "#FFF0DB",
-    accentColor: "#9ACF98",
     image: require("@/assets/images/community/asset-13.png"),
     top: 5,
   },
   {
     id: "help",
     label: "互助站",
-    watermark: "站",
+    watermarkImage: require("@/assets/images/fastuse/互助站背景.png"),
     backgroundColor: "#FFE8E1",
-    accentColor: "#F5ABB4",
     image: require("@/assets/images/community/asset-14.png"),
     top: 30,
   },
@@ -112,7 +107,13 @@ function FollowButton({ followed = false }: { followed?: boolean }) {
   return (
     <Pressable
       onPress={() => setIsFollowed((current) => !current)}
-      style={({ pressed }) => [styles.followButton, pressed && styles.pressed]}
+      style={({ pressed }) => [
+        styles.followButton,
+        {
+          backgroundColor: isFollowed ? "#FFEEDB" : "#FFD29B",
+        },
+        pressed && styles.pressed,
+      ]}
     >
       <Text style={styles.followButtonText}>
         {isFollowed ? "已关注" : "关注"}
@@ -319,14 +320,11 @@ export default function CommunityScreen() {
                   ]}
                 >
                   <Text style={styles.categoryLabel}>{item.label}</Text>
-                  <Text
-                    style={[
-                      styles.categoryWatermark,
-                      { color: item.accentColor },
-                    ]}
-                  >
-                    {item.watermark}
-                  </Text>
+                  <Image
+                    source={item.watermarkImage}
+                    style={styles.categoryWatermarkImage}
+                    resizeMode="contain"
+                  />
                   <Image
                     source={item.image}
                     style={styles.categoryImage}
@@ -436,13 +434,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "500",
   },
-  categoryWatermark: {
+  categoryWatermarkImage: {
     position: "absolute",
     top: 6,
     right: 6,
-    opacity: 0.55,
-    fontSize: 42,
-    fontWeight: "700",
+    width: 42,
+    height: 42,
   },
   categoryImage: {
     position: "absolute",
@@ -527,7 +524,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#D26A16",
     borderRadius: 17,
-    backgroundColor: "#FFE6C6",
+    backgroundColor: "#FFD29B",
   },
   followButtonText: {
     color: "#98551F",

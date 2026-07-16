@@ -2,13 +2,29 @@ import { router } from 'expo-router';
 import { useEffect } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 
+import { getCurrentUser } from '@/lib/auth-api';
+import { getAuthSession } from '@/lib/auth-session';
+
 export default function LaunchScreen() {
   useEffect(() => {
+    let active = true;
     const timer = setTimeout(() => {
-      router.replace('/onboarding');
+      void (async () => {
+        let session = await getAuthSession();
+        if (session) {
+          try {
+            await getCurrentUser();
+          } catch {
+            session = null;
+          }
+        }
+        if (!active) return;
+        router.replace(session ? '/(tabs)/study' : '/onboarding');
+      })();
     }, 1500);
 
     return () => {
+      active = false;
       clearTimeout(timer);
     };
   }, []);

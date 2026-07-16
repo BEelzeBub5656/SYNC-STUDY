@@ -1,7 +1,0 @@
-[    6129ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:8084/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=src%2Fapp&transform.reactCompiler=true:70574
-[    6197ms] [LOG] Running application "main" with appParams:
- {rootTag: #root, hydrate: undefined} 
-Development-level warnings: ON.
-Performance optimizations: OFF. @ http://127.0.0.1:8084/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=src%2Fapp&transform.reactCompiler=true:70574
-[    6312ms] [WARNING] "shadow*" style props are deprecated. Use "boxShadow". @ http://127.0.0.1:8084/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=src%2Fapp&transform.reactCompiler=true:70574
-[  127264ms] [VERBOSE] [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) %o @ http://127.0.0.1:8084/login:0

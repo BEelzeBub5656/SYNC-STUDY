@@ -94,6 +94,15 @@ public class UserRepository {
         return count != null && count > 0;
     }
 
+    public boolean existsById(Long userId) {
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM users WHERE id = ?",
+                Integer.class,
+                userId
+        );
+        return count != null && count > 0;
+    }
+
     public Optional<UserAuthData> findAuthByUsername(
             String username
     ) {

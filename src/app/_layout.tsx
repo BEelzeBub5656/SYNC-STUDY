@@ -21,12 +21,33 @@ export default function RootLayout() {
           options={{ animation: "slide_from_right" }}
         />
         <Stack.Screen
+          name="persona-builder"
+          options={{ animation: "slide_from_right" }}
+        />
+        <Stack.Screen
           name="guest"
           options={{ animation: "slide_from_right" }}
         />
         <Stack.Screen name="(tabs)" options={{ animation: "fade" }} />
         <Stack.Screen
           name="persona"
+          options={{ animation: "slide_from_right" }}
+        />
+        <Stack.Screen name="mood" options={{ animation: "slide_from_right" }} />
+        <Stack.Screen
+          name="exam-plan"
+          options={{ animation: "slide_from_right" }}
+        />
+        <Stack.Screen
+          name="exam-plan-detail"
+          options={{ animation: "slide_from_right" }}
+        />
+        <Stack.Screen
+          name="study-calendar"
+          options={{ animation: "slide_from_right" }}
+        />
+        <Stack.Screen
+          name="today-tasks"
           options={{ animation: "slide_from_right" }}
         />
       </Stack>

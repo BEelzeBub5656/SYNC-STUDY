@@ -1,6 +1,7 @@
 import { Inter_800ExtraBold, useFonts } from '@expo-google-fonts/inter';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import type {
     ImageSourcePropType,
     StyleProp,
@@ -8,6 +9,8 @@ import type {
     ViewStyle
 } from 'react-native';
 import {
+    ActivityIndicator,
+    Alert,
     Image,
     ImageBackground,
     Pressable,
@@ -20,6 +23,17 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
+
+import { StudyCheckInModal } from '@/components/study-check-in-modal';
+import { getLatestExamPlan, type ExamPlan } from '@/lib/exam-plan-api';
+import {
+    checkInToday,
+    type StudyCheckInSummary
+} from '@/lib/study-check-in-api';
+import {
+    getTodayTaskDashboard,
+    type TodayTaskDashboard
+} from '@/lib/today-task-api';
 
 type StudyMode = 'video' | 'training';
 type TrapezoidVariant = 'challenge' | 'points' | 'paper' | 'mock';
@@ -684,8 +698,58 @@ function TrainingHomeContent({ interLoaded }: { interLoaded: boolean }) {
 }
 
 export default function StudyScreen() {
+    const router = useRouter();
     const [mode, setMode] = useState<StudyMode>('training');
     const [fontsLoaded] = useFonts({ Inter_800ExtraBold });
+    const [checkInVisible, setCheckInVisible] = useState(false);
+    const [checkInLoading, setCheckInLoading] = useState(false);
+    const [checkInSummary, setCheckInSummary] = useState<StudyCheckInSummary | null>(null);
+    const [todayTaskDashboard, setTodayTaskDashboard] = useState<TodayTaskDashboard | null>(null);
+    const [examPlan, setExamPlan] = useState<ExamPlan | null>(null);
+    const pendingTasks = todayTaskDashboard?.pendingTasks ?? [];
+    const completedTasks = todayTaskDashboard?.completedTasks ?? [];
+    const displayedTasks = [...pendingTasks, ...completedTasks].slice(0, 3);
+    const totalTaskCount = pendingTasks.length + completedTasks.length;
+    const taskProgress = totalTaskCount
+        ? Math.round((completedTasks.length / totalTaskCount) * 100)
+        : 0;
+
+    useFocusEffect(
+        useCallback(() => {
+            let active = true;
+            Promise.allSettled([
+                getTodayTaskDashboard(),
+                getLatestExamPlan()
+            ]).then(([dashboardResult, planResult]) => {
+                if (!active) return;
+                setTodayTaskDashboard(
+                    dashboardResult.status === 'fulfilled' ? dashboardResult.value : null
+                );
+                setExamPlan(planResult.status === 'fulfilled' ? planResult.value : null);
+            });
+            return () => {
+                active = false;
+            };
+        }, [])
+    );
+
+    async function handleCheckIn() {
+        if (checkInLoading) return;
+
+        setCheckInLoading(true);
+        try {
+            const result = await checkInToday();
+            setCheckInSummary(result);
+            setCheckInVisible(true);
+        } catch (error) {
+            Alert.alert(
+                '打卡失败',
+                error instanceof Error ? error.message : '请稍后重试'
+            );
+        } finally {
+            setCheckInLoading(false);
+        }
+    }
 
     return (
         <View style={styles.screen}>
@@ -766,16 +830,34 @@ export default function StudyScreen() {
                                     目标设定 ›
                                 </Text>
                             </View>
-                            <Text style={styles.calendarLink}>
-                                查看我的学习日历 ›
-                            </Text>
+                            <Pressable
+                                accessibilityLabel="查看我的学习日历"
+                                accessibilityRole="button"
+                                hitSlop={8}
+                                onPress={() => router.push('/study-calendar')}
+                                style={({ pressed }) => [
+                                    styles.calendarLink,
+                                    pressed && styles.pressed
+                                ]}
+                            >
+                                <Text style={styles.calendarLinkText}>
+                                    查看我的学习日历 ›
+                                </Text>
+                            </Pressable>
                         </View>
                         <Text style={styles.goalHint}>
                             打卡代表你完成了相关目标的学习哦~
                         </Text>
 
                         <View style={styles.goalColumns}>
-                            <View style={styles.taskCard}>
+                            <Pressable
+                                accessibilityLabel="打开今日任务"
+                                onPress={() => router.push('/today-tasks')}
+                                style={({ pressed }) => [
+                                    styles.taskCard,
+                                    pressed && styles.pressed
+                                ]}
+                            >
                                 <View style={styles.cardTopRow}>
                                     <Text style={styles.cardTitle}>
                                         今日任务
@@ -784,38 +866,112 @@ export default function StudyScreen() {
                                         设置 ›
                                     </Text>
                                 </View>
-                                <Image
-                                    source={require('@/assets/images/study/icon42.png')}
-                                    style={styles.taskMascot}
-                                    resizeMode="contain"
-                                />
-                                <Text style={styles.emptyTitle}>
-                                    当前没有任务
-                                </Text>
-                                <Text style={styles.emptyHint}>
-                                    快来设置今天的任务吧~
-                                </Text>
-                            </View>
+                                {displayedTasks.length > 0 ? (
+                                    <View style={styles.taskListContent}>
+                                        <View style={styles.taskList}>
+                                            {displayedTasks.map((task, index) => (
+                                                <View key={task.id} style={styles.taskListItem}>
+                                                    <Text
+                                                        style={[
+                                                            styles.taskListText,
+                                                            task.completed && styles.taskListTextCompleted
+                                                        ]}
+                                                        numberOfLines={1}
+                                                    >
+                                                        {index + 1}.{task.title}
+                                                    </Text>
+                                                </View>
+                                            ))}
+                                        </View>
+                                        <View style={styles.taskProgressFooter}>
+                                            <Text style={styles.taskProgressLabel}>
+                                                完成进度{taskProgress}%
+                                            </Text>
+                                            <View style={styles.taskProgressTrack}>
+                                                <View
+                                                    style={[
+                                                        styles.taskProgressFill,
+                                                        { width: `${taskProgress}%` }
+                                                    ]}
+                                                />
+                                            </View>
+                                        </View>
+                                    </View>
+                                ) : (
+                                    <>
+                                        <Image
+                                            source={require('@/assets/images/study/icon42.png')}
+                                            style={styles.taskMascot}
+                                            resizeMode="contain"
+                                        />
+                                        <Text style={styles.emptyTitle}>
+                                            当前没有任务
+                                        </Text>
+                                        <Text style={styles.emptyHint}>
+                                            快来设置今天的任务吧~
+                                        </Text>
+                                    </>
+                                )}
+                            </Pressable>
 
                             <View style={styles.targetCard}>
-                                <View style={styles.targetIllustration}>
-                                    <View style={styles.targetProgress} />
-                                </View>
-                                <Text style={styles.targetEmptyTitle}>
-                                    当前没有目标
-                                </Text>
-                                <Text style={styles.targetEmptyHint}>
-                                    快来设置你的目标吧~
-                                </Text>
+                                {examPlan ? (
+                                    <>
+                                        <View style={styles.targetTabs}>
+                                            <View style={styles.targetTabActive}>
+                                                <Text style={styles.targetTabActiveText}>考试</Text>
+                                            </View>
+                                            <Text style={styles.targetSubject} numberOfLines={1}>
+                                                {examPlan.subject}
+                                            </Text>
+                                        </View>
+                                        <View style={styles.targetPlanContent}>
+                                            <View style={styles.targetDaysRow}>
+                                                <Text style={styles.targetDays}>{examPlan.remainingDays}</Text>
+                                                <Text style={styles.targetDaysUnit}>天</Text>
+                                            </View>
+                                            <Text style={styles.targetDate}>
+                                                目标日:{examPlan.examDate}
+                                            </Text>
+                                            <View style={styles.targetPlanProgressTrack}>
+                                                <View
+                                                    style={[
+                                                        styles.targetPlanProgressFill,
+                                                        { width: `${examPlan.progressPercent}%` }
+                                                    ]}
+                                                />
+                                            </View>
+                                        </View>
+                                    </>
+                                ) : (
+                                    <>
+                                        <View style={styles.targetIllustration}>
+                                            <View style={styles.targetProgress} />
+                                        </View>
+                                        <Text style={styles.targetEmptyTitle}>
+                                            当前没有目标
+                                        </Text>
+                                        <Text style={styles.targetEmptyHint}>
+                                            快来设置你的目标吧~
+                                        </Text>
+                                    </>
+                                )}
                                 <Pressable
+                                    disabled={checkInLoading}
+                                    onPress={handleCheckIn}
                                     style={({ pressed }) => [
                                         styles.checkInButton,
-                                        pressed && styles.pressed
+                                        pressed && styles.pressed,
+                                        checkInLoading && styles.checkInButtonDisabled
                                     ]}
                                 >
-                                    <Text style={styles.checkInText}>
-                                        去打卡
-                                    </Text>
+                                    {checkInLoading ? (
+                                        <ActivityIndicator color="#FFFFFF" size="small" />
+                                    ) : (
+                                        <Text style={styles.checkInText}>
+                                            去打卡
+                                        </Text>
+                                    )}
                                 </Pressable>
                             </View>
                         </View>
@@ -870,6 +1026,11 @@ export default function StudyScreen() {
                     )}
                 </ScrollView>
             </SafeAreaView>
+            <StudyCheckInModal
+                visible={checkInVisible}
+                summary={checkInSummary}
+                onClose={() => setCheckInVisible(false)}
+            />
         </View>
     );
 }
@@ -927,7 +1088,7 @@ const styles = StyleSheet.create({
     searchRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 8,
+        marginTop: -16,
         marginBottom: 12
     },
     searchBox: {
@@ -982,8 +1143,15 @@ const styles = StyleSheet.create({
     },
     calendarLink: {
         position: 'absolute',
-        right: 0,
-        top: 25,
+        right: -4,
+        top: 18,
+        zIndex: 3,
+        minWidth: 130,
+        height: 32,
+        alignItems: 'flex-end',
+        justifyContent: 'center'
+    },
+    calendarLinkText: {
         color: '#7A3C10',
         fontSize: 11
     },
@@ -1044,6 +1212,48 @@ const styles = StyleSheet.create({
         fontSize: 14,
         textAlign: 'center'
     },
+    taskListContent: {
+        flex: 1,
+        width: '100%',
+        justifyContent: 'space-between',
+        paddingTop: 7
+    },
+    taskList: {
+        gap: 6
+    },
+    taskListItem: {
+        minHeight: 24,
+        justifyContent: 'center',
+        paddingHorizontal: 10,
+        borderRadius: 12,
+        backgroundColor: '#E6F4FF'
+    },
+    taskListText: {
+        color: '#34495A',
+        fontSize: 11
+    },
+    taskListTextCompleted: {
+        color: '#9B9B9B',
+        textDecorationLine: 'line-through'
+    },
+    taskProgressFooter: {
+        gap: 4
+    },
+    taskProgressLabel: {
+        color: '#A58A73',
+        fontSize: 9
+    },
+    taskProgressTrack: {
+        height: 7,
+        overflow: 'hidden',
+        borderRadius: 4,
+        backgroundColor: '#D7C8B8'
+    },
+    taskProgressFill: {
+        height: '100%',
+        borderRadius: 4,
+        backgroundColor: '#F59A24'
+    },
     targetIllustration: {
         width: '100%',
         height: 38,
@@ -1054,6 +1264,73 @@ const styles = StyleSheet.create({
         width: '50%',
         height: '100%',
         borderTopRightRadius: 16,
+        backgroundColor: '#F59622'
+    },
+    targetTabs: {
+        width: '100%',
+        height: 38,
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFE7CD'
+    },
+    targetTabActive: {
+        width: '50%',
+        height: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderTopRightRadius: 16,
+        backgroundColor: '#F59622'
+    },
+    targetTabActiveText: {
+        color: '#FFFFFF',
+        fontSize: 12,
+        fontWeight: '600'
+    },
+    targetSubject: {
+        flex: 1,
+        paddingHorizontal: 7,
+        color: '#553A29',
+        fontSize: 11,
+        textAlign: 'center'
+    },
+    targetPlanContent: {
+        flex: 1,
+        width: '100%',
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    targetDaysRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-end'
+    },
+    targetDays: {
+        color: '#5C2E13',
+        fontSize: 42,
+        lineHeight: 45,
+        fontWeight: '600'
+    },
+    targetDaysUnit: {
+        marginBottom: 5,
+        marginLeft: 4,
+        color: '#5C2E13',
+        fontSize: 14
+    },
+    targetDate: {
+        marginTop: 2,
+        color: '#B2A69B',
+        fontSize: 9
+    },
+    targetPlanProgressTrack: {
+        width: '72%',
+        height: 4,
+        marginTop: 6,
+        overflow: 'hidden',
+        borderRadius: 2,
+        backgroundColor: '#F1D7B8'
+    },
+    targetPlanProgressFill: {
+        height: '100%',
+        borderRadius: 2,
         backgroundColor: '#F59622'
     },
     targetEmptyTitle: {
@@ -1084,6 +1361,9 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
         fontSize: 16,
         fontWeight: '600'
+    },
+    checkInButtonDisabled: {
+        opacity: 0.65
     },
     quickRow: {
         flexDirection: 'row',
@@ -1313,7 +1593,7 @@ const styles = StyleSheet.create({
         fontSize: 11
     },
     trainingContent: {
-        marginTop: 10
+        marginTop: -16
     },
     trainingBoard: {
         position: 'relative',
@@ -1509,14 +1789,14 @@ const styles = StyleSheet.create({
     },
     mockTitleGraphic: {
         position: 'absolute',
-        right: -2,
+        right: -24,
         bottom: 0,
         zIndex: 5,
         width: 158,
-        height: 42
+        height: 20
     },
     mockTitle: {
-        fontSize: 22,
+        fontSize: 23,
         lineHeight: 36,
         fontWeight: '800',
         textAlign: 'center'
@@ -1595,7 +1875,7 @@ const styles = StyleSheet.create({
     trainingShortcutRow: {
         flexDirection: 'row',
         gap: 10,
-        marginTop: 10
+        marginTop: 20
     },
     trainingShortcut: {
         flex: 1,

@@ -1,5 +1,6 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import {
   Image,
   Pressable,
@@ -11,7 +12,19 @@ import {
 } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
 
+import { getAccountAvatarSource } from "@/lib/account-avatar";
+import { getAuthSession } from "@/lib/auth-session";
+import { derivePersonaTraits, loadPersonaAnswers } from "@/lib/persona-profile";
+
 const DESIGN_WIDTH = 402;
+const DEFAULT_TRAITS = [
+  "焦虑的进取者",
+  "技能饥渴型学习者",
+  "群体学习",
+  "时间管理",
+  "多维发展需求者",
+  "基础知识薄弱",
+];
 
 type PersonaBubbleProps = {
   text: string;
@@ -40,7 +53,17 @@ function SmallTrait({ text, style }: { text: string; style: object }) {
   );
 }
 
-function PersonaOrbit() {
+function PersonaOrbit({
+  traits,
+  userId,
+}: {
+  traits: string[];
+  userId?: number;
+}) {
+  const displayTraits = [...traits, ...DEFAULT_TRAITS]
+    .filter((trait, index, all) => all.indexOf(trait) === index)
+    .slice(0, 6);
+
   return (
     <View style={styles.personaMap}>
       <Svg
@@ -96,32 +119,32 @@ function PersonaOrbit() {
       </Svg>
 
       <PersonaBubble
-        text="焦虑的进取者"
+        text={displayTraits[0]}
         colors={["#F1E3FF", "#F4FFD9"]}
         style={styles.traitTop}
       />
       <PersonaBubble
-        text={"技能饥渴型\n学习者"}
+        text={displayTraits[1]}
         colors={["#F1FFD5", "#FFF0D3"]}
         style={styles.traitLeftTop}
       />
       <PersonaBubble
-        text="群体学习"
+        text={displayTraits[2]}
         colors={["#FFE6CD", "#F2E4FF"]}
         style={styles.traitRightTop}
       />
       <PersonaBubble
-        text="时间管理"
+        text={displayTraits[3]}
         colors={["#DCEFFF", "#E8E0FF"]}
         style={styles.traitLeftBottom}
       />
       <PersonaBubble
-        text={"多维发展需\n求者"}
+        text={displayTraits[4]}
         colors={["#FFF0D8", "#D7EEFF"]}
         style={styles.traitRightBottom}
       />
       <PersonaBubble
-        text="基础知识薄弱"
+        text={displayTraits[5]}
         colors={["#E8FFD7", "#D8EEFF"]}
         style={styles.traitBottom}
       />
@@ -132,9 +155,9 @@ function PersonaOrbit() {
 
       <View style={styles.portraitRing}>
         <Image
-          source={require("@/assets/images/persona/asset-01.jpg")}
+          source={getAccountAvatarSource(userId)}
           style={styles.portraitImage}
-          resizeMode="cover"
+          resizeMode="contain"
         />
       </View>
     </View>
@@ -225,8 +248,33 @@ function InsightHeader({
 
 export default function PersonaScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ from?: string }>();
   const { width } = useWindowDimensions();
   const pageWidth = Math.min(width, DESIGN_WIDTH);
+  const [traits, setTraits] = useState<string[]>([]);
+  const [userId, setUserId] = useState<number>();
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([loadPersonaAnswers(), getAuthSession()]).then(
+      ([answers, session]) => {
+        if (!active) return;
+        setTraits(derivePersonaTraits(answers));
+        setUserId(session?.userId);
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  function handleBack() {
+    if (params.from === "builder") {
+      router.replace("/(tabs)/study");
+      return;
+    }
+    router.back();
+  }
 
   return (
     <View style={styles.screen}>
@@ -239,7 +287,7 @@ export default function PersonaScreen() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="返回"
-              onPress={() => router.back()}
+              onPress={handleBack}
               style={({ pressed }) => [
                 styles.backButton,
                 pressed && styles.pressed,
@@ -250,7 +298,7 @@ export default function PersonaScreen() {
             <Text style={styles.headerTitle}>人物画像</Text>
           </View>
 
-          <PersonaOrbit />
+          <PersonaOrbit traits={traits} userId={userId} />
 
           <View style={styles.insightPanel}>
             <View style={styles.panelHandle} />
@@ -262,7 +310,7 @@ export default function PersonaScreen() {
             />
             <View style={styles.pathDiagramBox}>
               <Image
-                source={require("@/assets/images/persona/asset-00.png")}
+                source={require("@/assets/images/persona/custom-solution-flow.png")}
                 style={styles.pathDiagram}
                 resizeMode="contain"
               />
@@ -438,6 +486,7 @@ const styles = StyleSheet.create({
     width: 62,
     height: 62,
     borderRadius: 31,
+    backgroundColor: "#FFEEDB",
   },
   insightPanel: {
     height: 688,
@@ -495,7 +544,7 @@ const styles = StyleSheet.create({
   },
   pathDiagram: {
     width: 300,
-    height: 42,
+    height: 54,
   },
   solutionText: {
     marginTop: 8,

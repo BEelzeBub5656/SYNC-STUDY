@@ -5,15 +5,21 @@ public class RegisterResponse {
     private Long userId;
     private String username;
     private String phone;
+    private String token;
+    private long expiresIn;
 
     public RegisterResponse(
             Long userId,
             String username,
-            String phone
+            String phone,
+            String token,
+            long expiresIn
     ) {
         this.userId = userId;
         this.username = username;
         this.phone = phone;
+        this.token = token;
+        this.expiresIn = expiresIn;
     }
 
     public Long getUserId() {
@@ -26,5 +32,13 @@ public class RegisterResponse {
 
     public String getPhone() {
         return phone;
+    }
+
+    public String getToken() {
+        return token;
+    }
+
+    public long getExpiresIn() {
+        return expiresIn;
     }
 }

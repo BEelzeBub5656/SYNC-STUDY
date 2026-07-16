@@ -9,8 +9,6 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class IdentityService {
 
-    private static final Long DEMO_USER_ID = 1L;
-
     private final IdentityRepository identityRepository;
 
     public IdentityService(
@@ -20,10 +18,11 @@ public class IdentityService {
     }
 
     public IdentityType saveIdentity(
+            Long userId,
             IdentityType identity
     ) {
         int affectedRows = identityRepository.updateIdentity(
-                DEMO_USER_ID,
+                userId,
                 identity
         );
 
@@ -37,9 +36,9 @@ public class IdentityService {
         return identity;
     }
 
-    public IdentityType getIdentity() {
+    public IdentityType getIdentity(Long userId) {
         return identityRepository
-                .findIdentityByUserId(DEMO_USER_ID)
+                .findIdentityByUserId(userId)
                 .orElseThrow(() ->
                         new ResponseStatusException(
                                 HttpStatus.NOT_FOUND,

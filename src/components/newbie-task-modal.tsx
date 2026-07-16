@@ -1,6 +1,16 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useState } from "react";
-import { Image, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  AccessibilityInfo,
+  Animated,
+  Image,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 export type NewbieTaskRoute =
   "/persona" | "/(tabs)/study" | "/(tabs)/plan" | "/(tabs)/community";
@@ -77,12 +87,49 @@ export function NewbieTaskModal({
   onTaskPress,
 }: NewbieTaskModalProps) {
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
+  const [welcomeBubbleOpacity] = useState(() => new Animated.Value(1));
 
   useEffect(() => {
-    if (!visible) {
-      setShowSkipConfirm(false);
-    }
-  }, [visible]);
+    if (!visible) return;
+
+    let active = true;
+    welcomeBubbleOpacity.setValue(1);
+
+    const hideTimer = setTimeout(() => {
+      void AccessibilityInfo.isReduceMotionEnabled().then(
+        (reduceMotionEnabled) => {
+          if (!active) return;
+
+          if (reduceMotionEnabled) {
+            welcomeBubbleOpacity.setValue(0);
+            return;
+          }
+
+          Animated.timing(welcomeBubbleOpacity, {
+            toValue: 0,
+            duration: 260,
+            useNativeDriver: Platform.OS !== "web",
+          }).start();
+        },
+      );
+    }, 3000);
+
+    return () => {
+      active = false;
+      clearTimeout(hideTimer);
+      welcomeBubbleOpacity.stopAnimation();
+    };
+  }, [visible, welcomeBubbleOpacity]);
+
+  function dismissModal() {
+    setShowSkipConfirm(false);
+    onDismiss();
+  }
+
+  function openTask(route: NewbieTaskRoute) {
+    setShowSkipConfirm(false);
+    onTaskPress(route);
+  }
 
   return (
     <Modal
@@ -96,17 +143,24 @@ export function NewbieTaskModal({
       <View style={styles.modalRoot}>
         <View style={styles.dimBackdrop} />
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="打开新手任务"
-          onPress={() => undefined}
-          style={styles.welcomeBubble}
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.welcomeBubble,
+            { opacity: welcomeBubbleOpacity },
+          ]}
         >
           <Text style={styles.welcomeText}>
             完成新手任务，快速解锁全部功能！
           </Text>
           <View style={styles.welcomeTail} />
-        </Pressable>
+        </Animated.View>
+
+        <Image
+          source={require("@/assets/images/newbie/asset-06.png")}
+          style={styles.newbieGuideMascot}
+          resizeMode="contain"
+        />
 
         <LinearGradient
           colors={["#FFF8F3", "#FFF0DE", "#FFE8C8"]}
@@ -139,7 +193,7 @@ export function NewbieTaskModal({
                   </Text>
                 </View>
                 <Pressable
-                  onPress={() => onTaskPress(task.route)}
+                  onPress={() => openTask(task.route)}
                   style={({ pressed }) => [
                     styles.goButton,
                     pressed && styles.pressed,
@@ -204,7 +258,7 @@ export function NewbieTaskModal({
                   <Text style={styles.cancelText}>取消</Text>
                 </Pressable>
                 <Pressable
-                  onPress={onDismiss}
+                  onPress={dismissModal}
                   style={({ pressed }) => [
                     styles.confirmButton,
                     styles.confirmButtonPrimary,
@@ -249,6 +303,15 @@ const styles = StyleSheet.create({
   welcomeText: {
     color: "#9C5A2B",
     fontSize: 14,
+  },
+  newbieGuideMascot: {
+    position: "absolute",
+    top: 126,
+    left: "50%",
+    zIndex: 2,
+    width: 91,
+    height: 103,
+    marginLeft: -45.5,
   },
   welcomeTail: {
     position: "absolute",

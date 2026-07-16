@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Image,
   ImageBackground,
@@ -16,6 +17,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { loginAccount } from '@/lib/auth-api';
 
 type LoginMode = 'code' | 'account';
 
@@ -58,7 +61,7 @@ function FormInput({
 }
 
 export default function LoginScreen() {
-  const [mode, setMode] = useState<LoginMode>('code');
+  const [mode, setMode] = useState<LoginMode>('account');
   const [phone, setPhone] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [account, setAccount] = useState('');
@@ -66,6 +69,7 @@ export default function LoginScreen() {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [agreed, setAgreed] = useState(false);
   const [countdown, setCountdown] = useState(0);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (countdown <= 0) return;
@@ -82,7 +86,7 @@ export default function LoginScreen() {
       ? phone.trim().length > 0 && verificationCode.trim().length > 0
       : account.trim().length > 0 && password.length > 0;
 
-  const canLogin = hasRequiredValues && agreed;
+  const canLogin = mode === 'account' && hasRequiredValues && agreed && !loading;
 
   function requestVerificationCode() {
     if (!/^1\d{10}$/.test(phone.trim())) {
@@ -90,11 +94,15 @@ export default function LoginScreen() {
       return;
     }
 
-    setCountdown(60);
-    Alert.alert('验证码已发送', '当前为前端演示，验证码可以任意填写。');
+    Alert.alert('暂未开放', '验证码登录需要接入短信服务，请先使用账号密码登录。');
   }
 
-  function handleLogin() {
+  async function handleLogin() {
+    if (mode === 'code') {
+      Alert.alert('暂未开放', '验证码登录需要接入短信服务，请切换到账号登录。');
+      return;
+    }
+
     if (!hasRequiredValues) {
       Alert.alert('信息未填写完整', '请先填写登录信息。');
       return;
@@ -105,7 +113,21 @@ export default function LoginScreen() {
       return;
     }
 
-    router.replace('/(tabs)/study');
+    setLoading(true);
+    try {
+      await loginAccount({
+        username: account.trim(),
+        password,
+      });
+      router.replace('/(tabs)/study');
+    } catch (error) {
+      Alert.alert(
+        '登录失败',
+        error instanceof Error ? error.message : '请稍后重试',
+      );
+    } finally {
+      setLoading(false);
+    }
   }
 
   function showPendingFeature(title: string) {
@@ -276,19 +298,24 @@ export default function LoginScreen() {
                   </View>
 
                   <Pressable
+                    disabled={!canLogin}
                     onPress={handleLogin}
                     style={({ pressed }) => [
                       styles.loginButton,
                       canLogin && styles.loginButtonEnabled,
                       pressed && styles.pressed,
                     ]}>
-                    <Text
-                      style={[
-                        styles.loginButtonText,
-                        canLogin && styles.loginButtonTextEnabled,
-                      ]}>
-                      登录
-                    </Text>
+                    {loading ? (
+                      <ActivityIndicator color="#76401E" size="small" />
+                    ) : (
+                      <Text
+                        style={[
+                          styles.loginButtonText,
+                          canLogin && styles.loginButtonTextEnabled,
+                        ]}>
+                        登录
+                      </Text>
+                    )}
                   </Pressable>
 
                   <Pressable
@@ -386,7 +413,7 @@ const styles = StyleSheet.create({
   },
   welcomeCopy: {
     position: 'absolute',
-    left: 24,
+    left: 20,
     top: 86,
     zIndex: 2,
   },
@@ -412,6 +439,7 @@ const styles = StyleSheet.create({
   },
   card: {
     flex: 1,
+    marginHorizontal: 20,
     overflow: 'hidden',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
