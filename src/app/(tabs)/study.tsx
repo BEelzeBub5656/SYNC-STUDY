@@ -25,7 +25,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 
 import { StudyCheckInModal } from '@/components/study-check-in-modal';
-import { getLatestExamPlan, type ExamPlan } from '@/lib/exam-plan-api';
+import {
+    getLearningGoals,
+    type LearningGoalTerm,
+    type LearningGoals
+} from '@/lib/learning-goal-api';
 import {
     checkInToday,
     type StudyCheckInSummary
@@ -629,10 +633,16 @@ function TrainingHomeContent({ interLoaded }: { interLoaded: boolean }) {
                 <Pressable
                     style={({ pressed }) => [
                         styles.trainingShortcut,
-                        styles.sprintShortcut,
                         pressed && styles.pressed
                     ]}
                 >
+                    <LinearGradient
+                        colors={['#D1E3A9', '#F3FFDE']}
+                        start={{ x: 0.5, y: 0 }}
+                        end={{ x: 0.5, y: 1 }}
+                        pointerEvents="none"
+                        style={styles.shortcutGradientFill}
+                    />
                     <View style={styles.shortcutTitleRow}>
                         <Text style={[styles.shortcutTitle, styles.sprintTitle]}>训练冲刺</Text>
                         <Image
@@ -641,18 +651,29 @@ function TrainingHomeContent({ interLoaded }: { interLoaded: boolean }) {
                             resizeMode="contain"
                         />
                     </View>
-                    <View style={[styles.shortcutButton, styles.sprintButton]}>
+                    <LinearGradient
+                        colors={['#CCE591', '#97B848']}
+                        start={{ x: 0, y: 0.5 }}
+                        end={{ x: 1, y: 0.5 }}
+                        style={styles.shortcutButton}
+                    >
                         <Text style={styles.shortcutButtonText}>开始</Text>
-                    </View>
+                    </LinearGradient>
                 </Pressable>
 
                 <Pressable
                     style={({ pressed }) => [
                         styles.trainingShortcut,
-                        styles.summaryShortcut,
                         pressed && styles.pressed
                     ]}
                 >
+                    <LinearGradient
+                        colors={['#FFD29B', '#FFEEDB']}
+                        start={{ x: 0.5, y: 0 }}
+                        end={{ x: 0.5, y: 1 }}
+                        pointerEvents="none"
+                        style={styles.shortcutGradientFill}
+                    />
                     <View style={styles.shortcutTitleRow}>
                         <Text style={[styles.shortcutTitle, styles.summaryTitle]}>归纳推荐</Text>
                         <Image
@@ -661,9 +682,14 @@ function TrainingHomeContent({ interLoaded }: { interLoaded: boolean }) {
                             resizeMode="contain"
                         />
                     </View>
-                    <View style={[styles.shortcutButton, styles.summaryButton]}>
+                    <LinearGradient
+                        colors={['#FFD2B1', '#E6823A']}
+                        start={{ x: 0, y: 0.5 }}
+                        end={{ x: 1, y: 0.5 }}
+                        style={styles.shortcutButton}
+                    >
                         <Text style={styles.shortcutButtonText}>查看</Text>
-                    </View>
+                    </LinearGradient>
                 </Pressable>
             </View>
 
@@ -705,7 +731,8 @@ export default function StudyScreen() {
     const [checkInLoading, setCheckInLoading] = useState(false);
     const [checkInSummary, setCheckInSummary] = useState<StudyCheckInSummary | null>(null);
     const [todayTaskDashboard, setTodayTaskDashboard] = useState<TodayTaskDashboard | null>(null);
-    const [examPlan, setExamPlan] = useState<ExamPlan | null>(null);
+    const [learningGoals, setLearningGoals] = useState<LearningGoals | null>(null);
+    const [selectedGoalTerm, setSelectedGoalTerm] = useState<LearningGoalTerm>('SHORT');
     const pendingTasks = todayTaskDashboard?.pendingTasks ?? [];
     const completedTasks = todayTaskDashboard?.completedTasks ?? [];
     const displayedTasks = [...pendingTasks, ...completedTasks].slice(0, 3);
@@ -719,19 +746,32 @@ export default function StudyScreen() {
             let active = true;
             Promise.allSettled([
                 getTodayTaskDashboard(),
-                getLatestExamPlan()
-            ]).then(([dashboardResult, planResult]) => {
+                getLearningGoals()
+            ]).then(([dashboardResult, goalsResult]) => {
                 if (!active) return;
                 setTodayTaskDashboard(
                     dashboardResult.status === 'fulfilled' ? dashboardResult.value : null
                 );
-                setExamPlan(planResult.status === 'fulfilled' ? planResult.value : null);
+                setLearningGoals(
+                    goalsResult.status === 'fulfilled' ? goalsResult.value : null
+                );
             });
             return () => {
                 active = false;
             };
         }, [])
     );
+
+    const selectedGoal = selectedGoalTerm === 'SHORT'
+        ? learningGoals?.shortTerm ?? null
+        : learningGoals?.longTerm ?? null;
+
+    function openGoalSetting() {
+        router.push({
+            pathname: '/(tabs)/plan',
+            params: { mode: 'goal' }
+        });
+    }
 
     async function handleCheckIn() {
         if (checkInLoading) return;
@@ -826,9 +866,16 @@ export default function StudyScreen() {
                                 <Text style={styles.goalTitle}>
                                     我的学习目标
                                 </Text>
-                                <Text style={styles.goalSetting}>
-                                    目标设定 ›
-                                </Text>
+                                <Pressable
+                                    accessibilityRole="button"
+                                    hitSlop={8}
+                                    onPress={openGoalSetting}
+                                    style={({ pressed }) => pressed && styles.pressed}
+                                >
+                                    <Text style={styles.goalSetting}>
+                                        目标设定 ›
+                                    </Text>
+                                </Pressable>
                             </View>
                             <Pressable
                                 accessibilityLabel="查看我的学习日历"
@@ -915,47 +962,79 @@ export default function StudyScreen() {
                             </Pressable>
 
                             <View style={styles.targetCard}>
-                                {examPlan ? (
-                                    <>
-                                        <View style={styles.targetTabs}>
-                                            <View style={styles.targetTabActive}>
-                                                <Text style={styles.targetTabActiveText}>考试</Text>
-                                            </View>
-                                            <Text style={styles.targetSubject} numberOfLines={1}>
-                                                {examPlan.subject}
+                                <View style={styles.targetTabs}>
+                                    <Pressable
+                                        accessibilityRole="tab"
+                                        accessibilityState={{ selected: selectedGoalTerm === 'SHORT' }}
+                                        onPress={() => setSelectedGoalTerm('SHORT')}
+                                        style={[
+                                            styles.targetTab,
+                                            selectedGoalTerm === 'SHORT' && styles.targetTabActive,
+                                            selectedGoalTerm === 'SHORT' && styles.targetTabActiveShort
+                                        ]}
+                                    >
+                                        <Text
+                                            numberOfLines={1}
+                                            style={[
+                                                styles.targetTabText,
+                                                selectedGoalTerm === 'SHORT' && styles.targetTabActiveText
+                                            ]}
+                                        >
+                                            {learningGoals?.shortTerm?.title ?? '短期目标'}
+                                        </Text>
+                                    </Pressable>
+                                    <Pressable
+                                        accessibilityRole="tab"
+                                        accessibilityState={{ selected: selectedGoalTerm === 'LONG' }}
+                                        onPress={() => setSelectedGoalTerm('LONG')}
+                                        style={[
+                                            styles.targetTab,
+                                            selectedGoalTerm === 'LONG' && styles.targetTabActive,
+                                            selectedGoalTerm === 'LONG' && styles.targetTabActiveLong
+                                        ]}
+                                    >
+                                        <Text
+                                            numberOfLines={1}
+                                            style={[
+                                                styles.targetTabText,
+                                                selectedGoalTerm === 'LONG' && styles.targetTabActiveText
+                                            ]}
+                                        >
+                                            {learningGoals?.longTerm?.title ?? '长期目标'}
+                                        </Text>
+                                    </Pressable>
+                                </View>
+                                <View style={styles.targetPlanContent}>
+                                    {selectedGoal ? (
+                                        <>
+                                            <Text style={styles.targetGoalDetail} numberOfLines={2}>
+                                                {selectedGoal.detail}
                                             </Text>
-                                        </View>
-                                        <View style={styles.targetPlanContent}>
-                                            <View style={styles.targetDaysRow}>
-                                                <Text style={styles.targetDays}>{examPlan.remainingDays}</Text>
-                                                <Text style={styles.targetDaysUnit}>天</Text>
-                                            </View>
                                             <Text style={styles.targetDate}>
-                                                目标日:{examPlan.examDate}
+                                                {selectedGoal.targetDate
+                                                    ? `目标日: ${selectedGoal.targetDate}`
+                                                    : '点击「目标设定」设置目标日期'}
                                             </Text>
                                             <View style={styles.targetPlanProgressTrack}>
                                                 <View
                                                     style={[
                                                         styles.targetPlanProgressFill,
-                                                        { width: `${examPlan.progressPercent}%` }
+                                                        { width: `${selectedGoal.progressPercent}%` }
                                                     ]}
                                                 />
                                             </View>
-                                        </View>
-                                    </>
-                                ) : (
-                                    <>
-                                        <View style={styles.targetIllustration}>
-                                            <View style={styles.targetProgress} />
-                                        </View>
-                                        <Text style={styles.targetEmptyTitle}>
-                                            当前没有目标
-                                        </Text>
-                                        <Text style={styles.targetEmptyHint}>
-                                            快来设置你的目标吧~
-                                        </Text>
-                                    </>
-                                )}
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Text style={styles.targetEmptyTitle}>
+                                                当前没有目标
+                                            </Text>
+                                            <Text style={styles.targetEmptyHint}>
+                                                点击目标设定进行编辑~
+                                            </Text>
+                                        </>
+                                    )}
+                                </View>
                                 <Pressable
                                     disabled={checkInLoading}
                                     onPress={handleCheckIn}
@@ -1057,7 +1136,7 @@ const styles = StyleSheet.create({
         maxWidth: 440,
         alignSelf: 'center',
         paddingHorizontal: 20,
-        paddingTop: 109,
+        paddingTop: 97,
         paddingBottom: 124
     },
     modeTabs: {
@@ -1254,18 +1333,6 @@ const styles = StyleSheet.create({
         borderRadius: 4,
         backgroundColor: '#F59A24'
     },
-    targetIllustration: {
-        width: '100%',
-        height: 38,
-        backgroundColor: '#FFE7CD',
-        overflow: 'hidden'
-    },
-    targetProgress: {
-        width: '50%',
-        height: '100%',
-        borderTopRightRadius: 16,
-        backgroundColor: '#F59622'
-    },
     targetTabs: {
         width: '100%',
         height: 38,
@@ -1273,25 +1340,31 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         backgroundColor: '#FFE7CD'
     },
-    targetTabActive: {
-        width: '50%',
+    targetTab: {
+        flex: 1,
         height: '100%',
+        paddingHorizontal: 6,
         alignItems: 'center',
-        justifyContent: 'center',
-        borderTopRightRadius: 16,
+        justifyContent: 'center'
+    },
+    targetTabActive: {
         backgroundColor: '#F59622'
+    },
+    targetTabActiveShort: {
+        borderTopRightRadius: 16
+    },
+    targetTabActiveLong: {
+        borderTopLeftRadius: 16
+    },
+    targetTabText: {
+        color: '#553A29',
+        fontSize: 11,
+        textAlign: 'center'
     },
     targetTabActiveText: {
         color: '#FFFFFF',
         fontSize: 12,
         fontWeight: '600'
-    },
-    targetSubject: {
-        flex: 1,
-        paddingHorizontal: 7,
-        color: '#553A29',
-        fontSize: 11,
-        textAlign: 'center'
     },
     targetPlanContent: {
         flex: 1,
@@ -1299,21 +1372,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center'
     },
-    targetDaysRow: {
-        flexDirection: 'row',
-        alignItems: 'flex-end'
-    },
-    targetDays: {
+    targetGoalDetail: {
+        maxWidth: '84%',
         color: '#5C2E13',
-        fontSize: 42,
-        lineHeight: 45,
-        fontWeight: '600'
-    },
-    targetDaysUnit: {
-        marginBottom: 5,
-        marginLeft: 4,
-        color: '#5C2E13',
-        fontSize: 14
+        fontSize: 20,
+        lineHeight: 25,
+        fontWeight: '600',
+        textAlign: 'center'
     },
     targetDate: {
         marginTop: 2,
@@ -1389,16 +1454,17 @@ const styles = StyleSheet.create({
         zIndex: 2
     },
     bookQuickImage: {
-        right: 0,
+        right: -16,
         bottom: -5,
-        width: 68,
-        height: 68
+        width: 75,
+        height: 75,
+        top: 60
     },
     courseQuickImage: {
         left: '50%',
         bottom: -5,
         width: 74,
-        height: 74,
+        height: 68,
         transform: [{ translateX: -37 }]
     },
     summaryQuickImage: {
@@ -1406,15 +1472,15 @@ const styles = StyleSheet.create({
         bottom: -5,
         width: 70,
         height: 70,
-        transform: [{ translateX: -35 }]
+        transform: [{ translateX: -25 }]
     },
     quickBadge: {
         position: 'absolute',
-        top: 11,
-        left: 9,
+        top: 6,
+        left: 5,
         zIndex: 1,
-        width: 43,
-        height: 52
+        width: 36,
+        height: 44
     },
     quickWaves: {
         position: 'absolute',
@@ -1885,11 +1951,12 @@ const styles = StyleSheet.create({
         borderRadius: 17,
         overflow: 'hidden'
     },
-    sprintShortcut: {
-        backgroundColor: '#E2F8C9'
-    },
-    summaryShortcut: {
-        backgroundColor: '#FFE0B7'
+    shortcutGradientFill: {
+        position: 'absolute',
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: 0
     },
     shortcutTitleRow: {
         flexDirection: 'row',
@@ -1918,12 +1985,6 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         borderRadius: 11
-    },
-    sprintButton: {
-        backgroundColor: '#9CC94C'
-    },
-    summaryButton: {
-        backgroundColor: '#F29B5A'
     },
     shortcutButtonText: {
         color: '#FFE7CD',

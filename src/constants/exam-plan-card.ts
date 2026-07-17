@@ -1,0 +1,3 @@
+export const EXAM_PLAN_CARD_SHORT_SIDE = 205;
+export const EXAM_PLAN_CARD_LONG_SIDE = 281;
+export const EXAM_PLAN_CARD_RADIUS = 24;

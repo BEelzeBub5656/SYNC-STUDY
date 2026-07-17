@@ -1,9 +1,9 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   AccessibilityInfo,
+  Alert,
   Animated,
   Image,
   ImageSourcePropType,
@@ -21,13 +21,16 @@ import {
 import Svg, { Path } from "react-native-svg";
 
 import {
+  getMoodCacheScope,
   inferMoodFromText,
+  isSameMoodCacheScope,
+  loadMoodCache,
   MoodId,
   MOODS,
   MOOD_IDS,
-  MOOD_STORAGE_KEY,
-  parseStoredMood,
+  saveMoodCache,
 } from "@/lib/mood";
+import { createMoodAdvice, toMoodRecord } from "@/lib/mood-api";
 
 const DESIGN_WIDTH = 402;
 const MOOD_SELECTOR_DRAG_DISTANCE = 96;
@@ -66,13 +69,18 @@ export default function MoodScreen() {
   useEffect(() => {
     let active = true;
 
-    AsyncStorage.getItem(MOOD_STORAGE_KEY).then((value) => {
-      const storedMood = parseStoredMood(value);
-      if (active && storedMood) {
-        setMoodId(storedMood.id);
-        setNote(storedMood.note);
-      }
-    });
+    getMoodCacheScope()
+      .then(async (scope) => {
+        const storedMood = await loadMoodCache(scope);
+        const currentScope = await getMoodCacheScope();
+        if (active && isSameMoodCacheScope(currentScope, scope) && storedMood) {
+          setMoodId(storedMood.id);
+          setNote(storedMood.note);
+        }
+      })
+      .catch(() => {
+        // Keep the default mood if local storage is unavailable.
+      });
 
     return () => {
       active = false;
@@ -191,13 +199,32 @@ export default function MoodScreen() {
   });
 
   async function saveMood(finalMood: MoodId) {
+    if (saving) return;
+
     setSaving(true);
     const finalNote = note.trim() || MOODS[finalMood].description;
-    await AsyncStorage.setItem(
-      MOOD_STORAGE_KEY,
-      JSON.stringify({ id: finalMood, note: finalNote }),
-    );
-    router.back();
+    try {
+      const cacheScope = await getMoodCacheScope();
+      const response = await createMoodAdvice({
+        moodId: finalMood,
+        description: finalNote,
+      });
+      const currentScope = await getMoodCacheScope();
+      if (!isSameMoodCacheScope(currentScope, cacheScope)) {
+        throw new Error("账号或日期已变化，请重新提交心情");
+      }
+      const record = toMoodRecord(response);
+      setMoodId(record.id);
+      setNote(record.note);
+      await saveMoodCache(record, cacheScope);
+      router.back();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "请检查网络后重试";
+      Alert.alert("暂时无法生成学习建议", message);
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handleConfirm() {

@@ -5,6 +5,7 @@ import com.syncstudy.backend.config.JwtAuthInterceptor;
 import com.syncstudy.backend.dto.CreateTodayTaskRequest;
 import com.syncstudy.backend.dto.TodayTaskDashboardResponse;
 import com.syncstudy.backend.dto.UpdateTaskCompletionRequest;
+import com.syncstudy.backend.dto.UpdateTodayTaskRequest;
 import com.syncstudy.backend.service.TodayTaskService;
 import com.syncstudy.backend.model.AuthenticatedUser;
 import jakarta.validation.Valid;
@@ -56,6 +57,16 @@ public class TodayTaskController {
             @Valid @RequestBody UpdateTaskCompletionRequest request
     ) {
         return ApiResponse.success(todayTaskService.updateCompletion(id, user.id(), request));
+    }
+
+    @PatchMapping("/{id}")
+    public ApiResponse<TodayTaskDashboardResponse> updateDetails(
+            @RequestAttribute(JwtAuthInterceptor.AUTHENTICATED_USER_ATTRIBUTE)
+            AuthenticatedUser user,
+            @PathVariable @Positive Long id,
+            @Valid @RequestBody UpdateTodayTaskRequest request
+    ) {
+        return ApiResponse.success(todayTaskService.updateDetails(id, user.id(), request));
     }
 
     @DeleteMapping("/{id}")

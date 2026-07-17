@@ -36,7 +36,7 @@ export default function RootLayout() {
         <Stack.Screen name="mood" options={{ animation: "slide_from_right" }} />
         <Stack.Screen
           name="exam-plan"
-          options={{ animation: "slide_from_right" }}
+          options={{ animation: "none" }}
         />
         <Stack.Screen
           name="exam-plan-detail"

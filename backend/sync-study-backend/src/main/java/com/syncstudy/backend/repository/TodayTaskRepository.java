@@ -11,6 +11,7 @@ import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public class TodayTaskRepository {
@@ -82,6 +83,45 @@ public class TodayTaskRepository {
         );
     }
 
+    public Optional<TodayTaskData> findByIdAndUserId(Long id, Long userId) {
+        List<TodayTaskData> tasks = jdbcTemplate.query("""
+                SELECT id, user_id, title, estimated_minutes, source, completed,
+                       task_date, completed_at, created_at
+                FROM today_tasks
+                WHERE id = ? AND user_id = ?
+                """, (resultSet, rowNumber) -> mapRow(resultSet), id, userId);
+        return tasks.stream().findFirst();
+    }
+
+    public boolean update(
+            Long id,
+            Long userId,
+            String title,
+            int estimatedMinutes,
+            boolean completed
+    ) {
+        String sql = """
+                UPDATE today_tasks
+                SET title = ?, estimated_minutes = ?, completed = ?,
+                    completed_at = CASE
+                        WHEN ? AND completed_at IS NULL THEN CURRENT_TIMESTAMP
+                        WHEN NOT ? THEN NULL
+                        ELSE completed_at
+                    END
+                WHERE id = ? AND user_id = ?
+                """;
+        return jdbcTemplate.update(
+                sql,
+                title,
+                estimatedMinutes,
+                completed,
+                completed,
+                completed,
+                id,
+                userId
+        ) == 1;
+    }
+
     public boolean updateCompletion(Long id, Long userId, boolean completed) {
         String sql = """
                 UPDATE today_tasks
@@ -98,5 +138,22 @@ public class TodayTaskRepository {
                 id,
                 userId
         ) == 1;
+    }
+
+    private TodayTaskData mapRow(java.sql.ResultSet resultSet)
+            throws java.sql.SQLException {
+        return new TodayTaskData(
+                resultSet.getLong("id"),
+                resultSet.getLong("user_id"),
+                resultSet.getString("title"),
+                resultSet.getInt("estimated_minutes"),
+                resultSet.getString("source"),
+                resultSet.getBoolean("completed"),
+                resultSet.getDate("task_date").toLocalDate(),
+                resultSet.getTimestamp("completed_at") == null
+                        ? null
+                        : resultSet.getTimestamp("completed_at").toLocalDateTime(),
+                resultSet.getTimestamp("created_at").toLocalDateTime()
+        );
     }
 }

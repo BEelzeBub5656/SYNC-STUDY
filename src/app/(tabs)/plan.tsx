@@ -1,32 +1,52 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AccessibilityInfo,
+  ActivityIndicator,
+  Alert,
   Animated,
   Image,
   ImageSourcePropType,
+  KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   useWindowDimensions,
   View,
 } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
 
-import { getCurrentUser } from "@/lib/auth-api";
-import { getLatestExamPlan, type ExamPlan } from "@/lib/exam-plan-api";
-import { MOOD_STORAGE_KEY, MoodId, parseStoredMood } from "@/lib/mood";
 import {
-  getTodayTaskDashboard,
-  type TodayTaskDashboard,
-} from "@/lib/today-task-api";
+  EXAM_PLAN_CARD_LONG_SIDE,
+  EXAM_PLAN_CARD_SHORT_SIDE,
+} from "@/constants/exam-plan-card";
+import { getCurrentUser } from "@/lib/auth-api";
+import {
+  getLearningGoals,
+  type LearningGoals,
+  updateLearningGoal,
+} from "@/lib/learning-goal-api";
+import {
+  createDefaultMoodRecord,
+  getMoodCacheScope,
+  isSameMoodCacheScope,
+  loadMoodCache,
+  saveMoodCache,
+  type MoodId,
+  type MoodRecord,
+  MOODS,
+} from "@/lib/mood";
+import { getTodayMood, toMoodRecord } from "@/lib/mood-api";
+import DatePickerModal from "@/components/date-picker-modal";
 
 const DESIGN_WIDTH = 402;
-const RECOMMENDATION_CARD_WIDTH = 205;
+const RECOMMENDATION_CARD_WIDTH = EXAM_PLAN_CARD_SHORT_SIDE;
+const RECOMMENDATION_CARD_HEIGHT = EXAM_PLAN_CARD_LONG_SIDE;
 const RECOMMENDATION_CARD_GAP = 34;
 const RECOMMENDATION_SNAP_INTERVAL =
   RECOMMENDATION_CARD_WIDTH + RECOMMENDATION_CARD_GAP;
@@ -59,6 +79,15 @@ const GOAL_QUOTES = [
 ] as const;
 
 type PlanMode = "ai" | "goal";
+
+type GoalDraft = {
+  shortTitle: string;
+  shortDetail: string;
+  shortTargetDate: string | null;
+  longTitle: string;
+  longDetail: string;
+  longTargetDate: string | null;
+};
 
 type Recommendation = {
   id: string;
@@ -191,10 +220,10 @@ const moodCards: Record<
   },
 };
 
-function MoodFlipCard({ moodId }: { moodId: MoodId }) {
+function MoodFlipCard({ mood }: { mood: MoodRecord }) {
   const [flipped, setFlipped] = useState(false);
   const [flipValue] = useState(() => new Animated.Value(0));
-  const card = moodCards[moodId];
+  const card = moodCards[mood.id];
   const frontRotation = flipValue.interpolate({
     inputRange: [0, 1],
     outputRange: ["0deg", "180deg"],
@@ -233,6 +262,14 @@ function MoodFlipCard({ moodId }: { moodId: MoodId }) {
           resizeMode="stretch"
           style={styles.moodCardImage}
         />
+        <View pointerEvents="none" style={styles.moodAdvicePanel}>
+          <Text style={styles.moodAdviceTitle}>
+            {MOODS[mood.id].title} · 今日行动建议
+          </Text>
+          <Text numberOfLines={5} style={styles.moodAdviceText}>
+            {mood.advice}
+          </Text>
+        </View>
       </Animated.View>
       <Animated.View
         style={[
@@ -251,13 +288,15 @@ function MoodFlipCard({ moodId }: { moodId: MoodId }) {
 }
 
 function AiPlanningPage({
-  moodId,
+  mood,
   pageWidth,
 }: {
-  moodId: MoodId;
+  mood: MoodRecord;
   pageWidth: number;
 }) {
   const recommendationRef = useRef<ScrollView>(null);
+  const examCardRef = useRef<View>(null);
+  const openingExamRef = useRef(false);
   const [recommendationScrollX] = useState(
     () => new Animated.Value(RECOMMENDATION_SNAP_INTERVAL),
   );
@@ -279,6 +318,41 @@ function AiPlanningPage({
     return () => subscription.remove();
   }, []);
 
+  useFocusEffect(
+    useCallback(() => {
+      openingExamRef.current = false;
+    }, []),
+  );
+
+  function openExamPlan() {
+    if (openingExamRef.current) return;
+
+    openingExamRef.current = true;
+
+    if (reduceMotionEnabled || !examCardRef.current) {
+      router.push("/exam-plan");
+      return;
+    }
+
+    examCardRef.current.measureInWindow((x, y, width, height) => {
+      if (width <= 0 || height <= 0) {
+        router.push("/exam-plan");
+        return;
+      }
+
+      router.push({
+        pathname: "/exam-plan",
+        params: {
+          entry: "recommendation-card",
+          sourceX: String(x),
+          sourceY: String(y),
+          sourceWidth: String(width),
+          sourceHeight: String(height),
+        },
+      });
+    });
+  }
+
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       recommendationRef.current?.scrollTo({
@@ -292,7 +366,7 @@ function AiPlanningPage({
 
   return (
     <>
-      <MoodFlipCard key={moodId} moodId={moodId} />
+      <MoodFlipCard key={mood.id} mood={mood} />
 
       <Pressable
         onPress={() => router.push("/mood")}
@@ -361,14 +435,15 @@ function AiPlanningPage({
                 { transform: [{ rotate }, { scale }] },
               ]}
             >
-              <RecommendationCard
-                item={item}
-                onPress={
-                  item.id === "exam"
-                    ? () => router.push("/exam-plan")
-                    : undefined
-                }
-              />
+              <View
+                ref={item.id === "exam" ? examCardRef : undefined}
+                collapsable={item.id === "exam" ? false : undefined}
+              >
+                <RecommendationCard
+                  item={item}
+                  onPress={item.id === "exam" ? openExamPlan : undefined}
+                />
+              </View>
             </Animated.View>
           );
         })}
@@ -543,6 +618,194 @@ function GoalRow({
   );
 }
 
+function GoalEditorModal({
+  goals,
+  visible,
+  onClose,
+  onSave,
+}: {
+  goals: LearningGoals | null;
+  visible: boolean;
+  onClose: () => void;
+  onSave: (draft: GoalDraft) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState<GoalDraft>(() => ({
+    shortTitle: goals?.shortTerm?.title ?? "",
+    shortDetail: goals?.shortTerm?.detail ?? "",
+    shortTargetDate: goals?.shortTerm?.targetDate ?? null,
+    longTitle: goals?.longTerm?.title ?? "",
+    longDetail: goals?.longTerm?.detail ?? "",
+    longTargetDate: goals?.longTerm?.targetDate ?? null,
+  }));
+  const [saving, setSaving] = useState(false);
+  const [datePickerTarget, setDatePickerTarget] = useState<"SHORT" | "LONG" | null>(null);
+
+  const canSave =
+    draft.shortTitle.trim().length > 0 &&
+    draft.shortDetail.trim().length > 0 &&
+    draft.longTitle.trim().length > 0 &&
+    draft.longDetail.trim().length > 0;
+
+  async function handleSave() {
+    if (!canSave || saving) return;
+    setSaving(true);
+    try {
+      await onSave({
+        shortTitle: draft.shortTitle.trim(),
+        shortDetail: draft.shortDetail.trim(),
+        shortTargetDate: draft.shortTargetDate,
+        longTitle: draft.longTitle.trim(),
+        longDetail: draft.longDetail.trim(),
+        longTargetDate: draft.longTargetDate,
+      });
+      onClose();
+    } catch (error) {
+      Alert.alert(
+        "保存失败",
+        error instanceof Error ? error.message : "请稍后重试",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function updateDraft(field: keyof GoalDraft, value: string) {
+    setDraft((current) => ({ ...current, [field]: value }));
+  }
+
+  return (
+    <Modal
+      animationType="fade"
+      onRequestClose={onClose}
+      transparent
+      visible={visible}
+    >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={styles.goalEditorOverlay}
+      >
+        <Pressable style={styles.goalEditorBackdrop} onPress={onClose} />
+        <View style={styles.goalEditorCard}>
+          <Text style={styles.goalEditorTitle}>修改当前目标</Text>
+          <Text style={styles.goalEditorHint}>
+            标题会显示在主页卡片顶部，详情会随所选目标切换。
+          </Text>
+
+          <Text style={styles.goalEditorSectionTitle}>短期目标</Text>
+          <TextInput
+            maxLength={12}
+            onChangeText={(value) => updateDraft("shortTitle", value)}
+            placeholder="例如：考试"
+            placeholderTextColor="#B9A99D"
+            style={styles.goalEditorInput}
+            value={draft.shortTitle}
+          />
+          <TextInput
+            maxLength={32}
+            onChangeText={(value) => updateDraft("shortDetail", value)}
+            placeholder="例如：考研"
+            placeholderTextColor="#B9A99D"
+            style={[styles.goalEditorInput, styles.goalEditorDetailInput]}
+            value={draft.shortDetail}
+          />
+          <Pressable
+            onPress={() => setDatePickerTarget("SHORT")}
+            style={({ pressed }) => [
+              styles.goalEditorDateButton,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={styles.goalEditorDateLabel}>📅 目标日期</Text>
+            <Text style={styles.goalEditorDateValue}>
+              {draft.shortTargetDate ?? "点击选择"}
+            </Text>
+          </Pressable>
+
+          <Text style={styles.goalEditorSectionTitle}>长期目标</Text>
+          <TextInput
+            maxLength={12}
+            onChangeText={(value) => updateDraft("longTitle", value)}
+            placeholder="例如：英语四级"
+            placeholderTextColor="#B9A99D"
+            style={styles.goalEditorInput}
+            value={draft.longTitle}
+          />
+          <TextInput
+            maxLength={32}
+            onChangeText={(value) => updateDraft("longDetail", value)}
+            placeholder="例如：坚持每日听力和词汇训练"
+            placeholderTextColor="#B9A99D"
+            style={[styles.goalEditorInput, styles.goalEditorDetailInput]}
+            value={draft.longDetail}
+          />
+          <Pressable
+            onPress={() => setDatePickerTarget("LONG")}
+            style={({ pressed }) => [
+              styles.goalEditorDateButton,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={styles.goalEditorDateLabel}>📅 目标日期</Text>
+            <Text style={styles.goalEditorDateValue}>
+              {draft.longTargetDate ?? "点击选择"}
+            </Text>
+          </Pressable>
+
+          <View style={styles.goalEditorActions}>
+            <Pressable
+              accessibilityRole="button"
+              disabled={saving}
+              onPress={onClose}
+              style={({ pressed }) => [
+                styles.goalEditorCancelButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.goalEditorCancelText}>取消</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              disabled={!canSave || saving}
+              onPress={handleSave}
+              style={({ pressed }) => [
+                styles.goalEditorSaveButton,
+                (!canSave || saving) && styles.goalEditorButtonDisabled,
+                pressed && canSave && styles.pressed,
+              ]}
+            >
+              {saving ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Text style={styles.goalEditorSaveText}>保存</Text>
+              )}
+            </Pressable>
+          </View>
+        </View>
+
+        <DatePickerModal
+          visible={datePickerTarget !== null}
+          value={
+            datePickerTarget === "SHORT"
+              ? draft.shortTargetDate
+              : datePickerTarget === "LONG"
+                ? draft.longTargetDate
+                : null
+          }
+          onConfirm={(date) => {
+            if (datePickerTarget === "SHORT") {
+              updateDraft("shortTargetDate", date);
+            } else if (datePickerTarget === "LONG") {
+              updateDraft("longTargetDate", date);
+            }
+            setDatePickerTarget(null);
+          }}
+          onClose={() => setDatePickerTarget(null)}
+        />
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
 function InfoCard({
   backgroundWord,
   title,
@@ -571,44 +834,52 @@ function InfoCard({
 }
 
 function GoalSettingPage() {
-  const router = useRouter();
   const [username, setUsername] = useState("Jessica");
-  const [examPlan, setExamPlan] = useState<ExamPlan | null>(null);
-  const [todayDashboard, setTodayDashboard] = useState<TodayTaskDashboard | null>(null);
+  const [goals, setGoals] = useState<LearningGoals | null>(null);
+  const [editorVisible, setEditorVisible] = useState(false);
   const [quoteIndex, setQuoteIndex] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      Promise.allSettled([
-        getCurrentUser(),
-        getTodayTaskDashboard(),
-        getLatestExamPlan(),
-      ]).then(([userResult, dashboardResult, planResult]) => {
+      Promise.allSettled([getCurrentUser(), getLearningGoals()]).then(
+        ([userResult, goalsResult]) => {
         if (!active) return;
         if (userResult.status === "fulfilled") {
           setUsername(userResult.value.username);
         }
-        setTodayDashboard(
-          dashboardResult.status === "fulfilled" ? dashboardResult.value : null,
-        );
-        setExamPlan(planResult.status === "fulfilled" ? planResult.value : null);
-      });
+          setGoals(goalsResult.status === "fulfilled" ? goalsResult.value : null);
+        },
+      );
       return () => {
         active = false;
       };
     }, []),
   );
 
-  const todayActions = todayDashboard
-    ? [...todayDashboard.pendingTasks, ...todayDashboard.completedTasks]
-        .slice(0, 3)
-        .map((task) => task.title)
-    : [];
-  const examActions = examPlan?.phases
-    .flatMap((phase) => phase.tasks)
-    .slice(0, 3) ?? [];
+  const shortGoal = goals?.shortTerm ?? null;
+  const longGoal = goals?.longTerm ?? null;
   const quote = GOAL_QUOTES[quoteIndex];
+
+  async function saveGoals(draft: GoalDraft) {
+    const [shortTerm, longTerm] = await Promise.all([
+      updateLearningGoal("SHORT", {
+        title: draft.shortTitle,
+        detail: draft.shortDetail,
+        targetDate: draft.shortTargetDate,
+        progressPercent: shortGoal?.progressPercent ?? 0,
+        actions: shortGoal?.actions ?? [],
+      }),
+      updateLearningGoal("LONG", {
+        title: draft.longTitle,
+        detail: draft.longDetail,
+        targetDate: draft.longTargetDate,
+        progressPercent: longGoal?.progressPercent ?? 0,
+        actions: longGoal?.actions ?? [],
+      }),
+    ]);
+    setGoals({ shortTerm, longTerm });
+  }
 
   function changeQuote() {
     setQuoteIndex((currentIndex) => {
@@ -632,7 +903,11 @@ function GoalSettingPage() {
           </Text>
         </View>
         <View style={styles.greetingChevrons}>
-          <GreetingChevrons />
+          <Image
+            source={require("@/assets/images/fastuse/icon44.png")}
+            style={styles.greetingChevronImage}
+            resizeMode="contain"
+          />
         </View>
       </View>
 
@@ -648,15 +923,15 @@ function GoalSettingPage() {
         </Text>
         <GoalRow
           title="短期目标"
-          value={todayActions.length > 0 ? `今日任务 ${todayActions.length}项` : "今日任务"}
-          duration="当天"
-          actions={todayActions.length > 0 ? todayActions : ["前往今日任务添加学习安排"]}
+          value={shortGoal?.title ?? "暂未设置"}
+          duration={shortGoal?.targetDate ? `目标日 ${shortGoal.targetDate}` : "近期"}
+          actions={shortGoal ? [shortGoal.detail, ...shortGoal.actions].slice(0, 3) : ["点击下方按钮设置短期目标"]}
         />
         <GoalRow
           title="长期目标"
-          value={examPlan?.subject ?? "暂未设置"}
-          duration={examPlan ? `${examPlan.remainingDays}天` : "待设置"}
-          actions={examActions.length > 0 ? examActions : ["创建考试计划后自动生成行动清单"]}
+          value={longGoal?.title ?? "暂未设置"}
+          duration={longGoal?.targetDate ? `目标日 ${longGoal.targetDate}` : "长期"}
+          actions={longGoal ? [longGoal.detail, ...longGoal.actions].slice(0, 3) : ["点击下方按钮设置长期目标"]}
         />
 
         <LinearGradient
@@ -666,7 +941,7 @@ function GoalSettingPage() {
           style={styles.editGoalButton}
         >
           <Pressable
-            onPress={() => router.push("/exam-plan")}
+            onPress={() => setEditorVisible(true)}
             style={({ pressed }) => [
               styles.editGoalPressable,
               pressed && styles.pressed,
@@ -715,31 +990,79 @@ function GoalSettingPage() {
           description="上周80%用户靠目标计划完成任务"
         />
       </View>
+
+      {editorVisible ? (
+        <GoalEditorModal
+          goals={goals}
+          visible
+          onClose={() => setEditorVisible(false)}
+          onSave={saveGoals}
+        />
+      ) : null}
     </>
   );
 }
 
 export default function PlanScreen() {
   const { width } = useWindowDimensions();
+  const { mode: requestedMode } = useLocalSearchParams<{ mode?: string }>();
   const pageWidth = Math.min(width, DESIGN_WIDTH);
   const [mode, setMode] = useState<PlanMode>("ai");
-  const [moodId, setMoodId] = useState<MoodId>("happy");
+  const [mood, setMood] = useState<MoodRecord>(() =>
+    createDefaultMoodRecord("happy"),
+  );
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
+      const modeFrame = requestedMode === "goal"
+        ? requestAnimationFrame(() => setMode("goal"))
+        : null;
+      setMood(createDefaultMoodRecord("happy"));
 
-      AsyncStorage.getItem(MOOD_STORAGE_KEY).then((value) => {
-        const storedMood = parseStoredMood(value);
-        if (active && storedMood) {
-          setMoodId(storedMood.id);
+      void (async () => {
+        try {
+          const cacheScope = await getMoodCacheScope();
+          try {
+            const todayMood = toMoodRecord(await getTodayMood());
+            const currentScope = await getMoodCacheScope();
+            if (!isSameMoodCacheScope(currentScope, cacheScope)) {
+              return;
+            }
+            if (todayMood.date !== cacheScope.date) {
+              throw new Error("后端返回的不是设备本地今日心情");
+            }
+            if (active) {
+              setMood(todayMood);
+            }
+            await saveMoodCache(todayMood, cacheScope);
+          } catch {
+            const currentScope = await getMoodCacheScope();
+            if (!isSameMoodCacheScope(currentScope, cacheScope)) {
+              return;
+            }
+            const storedMood = await loadMoodCache(cacheScope);
+            const latestScope = await getMoodCacheScope();
+            if (
+              active &&
+              isSameMoodCacheScope(latestScope, cacheScope) &&
+              storedMood
+            ) {
+              setMood(storedMood);
+            }
+          }
+        } catch {
+          // Keep the reset default mood when auth or local storage is unavailable.
         }
-      });
+      })();
 
       return () => {
         active = false;
+        if (modeFrame !== null) {
+          cancelAnimationFrame(modeFrame);
+        }
       };
-    }, []),
+    }, [requestedMode]),
   );
 
   return (
@@ -757,7 +1080,7 @@ export default function PlanScreen() {
         <View style={[styles.page, { width: pageWidth }]}>
           <TopModeTabs mode={mode} onChange={setMode} />
           {mode === "ai" ? (
-            <AiPlanningPage moodId={moodId} pageWidth={pageWidth} />
+            <AiPlanningPage mood={mood} pageWidth={pageWidth} />
           ) : (
             <GoalSettingPage />
           )}
@@ -832,6 +1155,29 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
   },
+  moodAdvicePanel: {
+    position: "absolute",
+    top: 20,
+    right: 17,
+    width: 216,
+    minHeight: 171,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 12,
+    borderRadius: 14,
+    backgroundColor: "rgba(255, 247, 235, 0.96)",
+  },
+  moodAdviceTitle: {
+    color: "#9A501A",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  moodAdviceText: {
+    marginTop: 9,
+    color: "#5D3A24",
+    fontSize: 13,
+    lineHeight: 20,
+  },
   switchButton: {
     width: 76,
     height: 31,
@@ -862,19 +1208,19 @@ const styles = StyleSheet.create({
   },
   recommendationCardMotion: {
     width: RECOMMENDATION_CARD_WIDTH,
-    height: 281,
+    height: RECOMMENDATION_CARD_HEIGHT,
   },
   recommendationCard: {
     position: "relative",
     width: RECOMMENDATION_CARD_WIDTH,
-    height: 281,
+    height: RECOMMENDATION_CARD_HEIGHT,
     overflow: "hidden",
     borderRadius: 22,
     boxShadow: "0 5px 9px rgba(70, 45, 24, 0.18)",
   },
   recommendationPressable: {
     width: RECOMMENDATION_CARD_WIDTH,
-    height: 281,
+    height: RECOMMENDATION_CARD_HEIGHT,
   },
   recommendationTitle: {
     position: "absolute",
@@ -957,6 +1303,10 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 1,
     right: -3,
+  },
+  greetingChevronImage: {
+    width: 76,
+    height: 86,
   },
   goalPanel: {
     minHeight: 270,
@@ -1065,6 +1415,118 @@ const styles = StyleSheet.create({
   editGoalText: {
     color: "#6C422A",
     fontSize: 16,
+  },
+  goalEditorOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+  },
+  goalEditorBackdrop: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: "rgba(55, 38, 26, 0.38)",
+  },
+  goalEditorCard: {
+    width: "100%",
+    maxWidth: 370,
+    padding: 22,
+    borderRadius: 24,
+    backgroundColor: "#FFF9F3",
+    boxShadow: "0 12px 28px rgba(87, 53, 31, 0.24)",
+    elevation: 10,
+  },
+  goalEditorTitle: {
+    color: "#5F351F",
+    fontSize: 20,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  goalEditorHint: {
+    marginTop: 6,
+    marginBottom: 14,
+    color: "#9A7058",
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: "center",
+  },
+  goalEditorSectionTitle: {
+    marginTop: 10,
+    marginBottom: 6,
+    color: "#8E4E28",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  goalEditorInput: {
+    height: 42,
+    marginBottom: 8,
+    paddingHorizontal: 13,
+    borderWidth: 1,
+    borderColor: "#F2C798",
+    borderRadius: 12,
+    color: "#4A3325",
+    fontSize: 14,
+    backgroundColor: "#FFFFFF",
+  },
+  goalEditorDetailInput: {
+    borderColor: "#E5D4F0",
+  },
+  goalEditorDateButton: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    height: 42,
+    marginBottom: 8,
+    paddingHorizontal: 13,
+    borderWidth: 1,
+    borderColor: "#A8D5BA",
+    borderRadius: 12,
+    backgroundColor: "#F7FFFA",
+  },
+  goalEditorDateLabel: {
+    color: "#4A7C5C",
+    fontSize: 14,
+  },
+  goalEditorDateValue: {
+    color: "#6E4A30",
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  goalEditorActions: {
+    marginTop: 14,
+    flexDirection: "row",
+    gap: 12,
+  },
+  goalEditorCancelButton: {
+    flex: 1,
+    height: 42,
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 21,
+    backgroundColor: "#F5E8DC",
+  },
+  goalEditorCancelText: {
+    color: "#795844",
+    fontSize: 15,
+  },
+  goalEditorSaveButton: {
+    flex: 1,
+    height: 42,
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 21,
+    backgroundColor: "#F59A24",
+  },
+  goalEditorSaveText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  goalEditorButtonDisabled: {
+    opacity: 0.45,
   },
   quoteCard: {
     height: 70,

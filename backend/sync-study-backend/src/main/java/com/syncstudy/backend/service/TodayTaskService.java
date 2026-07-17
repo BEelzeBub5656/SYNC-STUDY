@@ -5,6 +5,8 @@ import com.syncstudy.backend.dto.RecommendedTaskResponse;
 import com.syncstudy.backend.dto.TodayTaskDashboardResponse;
 import com.syncstudy.backend.dto.TodayTaskItemResponse;
 import com.syncstudy.backend.dto.UpdateTaskCompletionRequest;
+import com.syncstudy.backend.dto.UpdateTodayTaskRequest;
+import com.syncstudy.backend.dto.InternalTaskUpdateRequest;
 import com.syncstudy.backend.model.TodayTaskData;
 import com.syncstudy.backend.repository.StudyCheckInRepository;
 import com.syncstudy.backend.repository.TodayTaskRepository;
@@ -48,14 +50,89 @@ public class TodayTaskService {
     }
 
     public TodayTaskDashboardResponse create(Long userId, CreateTodayTaskRequest request) {
-        taskRepository.insert(
+        createItem(userId, request, LocalDate.now());
+        return getDashboard(userId);
+    }
+
+    public TodayTaskItemResponse createItem(
+            Long userId,
+            CreateTodayTaskRequest request,
+            LocalDate taskDate
+    ) {
+        return createItem(
                 userId,
-                request.title().trim(),
+                request.title(),
                 request.estimatedMinutes(),
                 request.source(),
-                LocalDate.now()
+                taskDate
+        );
+    }
+
+    public TodayTaskItemResponse createItem(
+            Long userId,
+            String title,
+            int estimatedMinutes,
+            String source,
+            LocalDate taskDate
+    ) {
+        Long id = taskRepository.insert(
+                userId,
+                title.trim(),
+                estimatedMinutes,
+                source,
+                taskDate
+        );
+        return getItem(userId, id);
+    }
+
+    public List<TodayTaskItemResponse> listItems(Long userId, LocalDate taskDate) {
+        return taskRepository.findByUserAndDate(userId, taskDate).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    public TodayTaskDashboardResponse updateDetails(
+            Long taskId,
+            Long userId,
+            UpdateTodayTaskRequest request
+    ) {
+        TodayTaskData current = getOwnedTask(taskId, userId);
+        if (request.title() == null && request.estimatedMinutes() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "至少提供一个要修改的字段");
+        }
+        updateStoredTask(
+                taskId,
+                userId,
+                request.title() == null ? current.title() : normalizedTitle(request.title()),
+                request.estimatedMinutes() == null
+                        ? current.estimatedMinutes()
+                        : request.estimatedMinutes(),
+                current.completed()
         );
         return getDashboard(userId);
+    }
+
+    public TodayTaskItemResponse updateItem(
+            Long taskId,
+            Long userId,
+            InternalTaskUpdateRequest request
+    ) {
+        TodayTaskData current = getOwnedTask(taskId, userId);
+        if (request.title() == null
+                && request.estimatedMinutes() == null
+                && request.completed() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "至少提供一个要修改的字段");
+        }
+        updateStoredTask(
+                taskId,
+                userId,
+                request.title() == null ? current.title() : normalizedTitle(request.title()),
+                request.estimatedMinutes() == null
+                        ? current.estimatedMinutes()
+                        : request.estimatedMinutes(),
+                request.completed() == null ? current.completed() : request.completed()
+        );
+        return getItem(userId, taskId);
     }
 
     public TodayTaskDashboardResponse updateCompletion(
@@ -74,10 +151,14 @@ public class TodayTaskService {
     }
 
     public TodayTaskDashboardResponse delete(Long taskId, Long userId) {
+        deleteItem(taskId, userId);
+        return getDashboard(userId);
+    }
+
+    public void deleteItem(Long taskId, Long userId) {
         if (!taskRepository.delete(taskId, userId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "今日任务不存在");
         }
-        return getDashboard(userId);
     }
 
     private TodayTaskDashboardResponse buildDashboard(Long userId, LocalDate today) {
@@ -114,6 +195,44 @@ public class TodayTaskService {
                 task.completed(),
                 task.completedAt()
         );
+    }
+
+    private TodayTaskItemResponse getItem(Long userId, Long taskId) {
+        return toResponse(getOwnedTask(taskId, userId));
+    }
+
+    private TodayTaskData getOwnedTask(Long taskId, Long userId) {
+        return taskRepository.findByIdAndUserId(taskId, userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "今日任务不存在"
+                ));
+    }
+
+    private void updateStoredTask(
+            Long taskId,
+            Long userId,
+            String title,
+            int estimatedMinutes,
+            boolean completed
+    ) {
+        if (!taskRepository.update(
+                taskId,
+                userId,
+                title,
+                estimatedMinutes,
+                completed
+        )) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "今日任务不存在");
+        }
+    }
+
+    private String normalizedTitle(String title) {
+        String normalized = title.trim();
+        if (normalized.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "任务名称不能为空");
+        }
+        return normalized;
     }
 
 }

@@ -23,7 +23,7 @@ const TAB_BAR_HEIGHT = 94;
 const TAB_BAR_MAX_WIDTH = 404;
 const TAB_BAR_SIDE_MARGIN = 10;
 const CENTER_MASCOT_SIZE = 55;
-const ACTIVE_BUBBLE_SIZE = 74;
+const ACTIVE_BUBBLE_SIZE = 66;
 const NEWBIE_GUIDE_SEEN_KEY_PREFIX = "newbie-guide-seen-v3";
 
 type TabsProps = ComponentProps<typeof Tabs>;
@@ -99,7 +99,7 @@ function AnimatedTabBar({
   useEffect(() => {
     Animated.spring(animatedIndex, {
       toValue: state.index,
-      damping: 18,
+      damping: 20,
       stiffness: 180,
       mass: 0.8,
       useNativeDriver: true,

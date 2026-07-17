@@ -1,9 +1,10 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Image,
   ImageBackground,
   Pressable,
@@ -84,6 +85,19 @@ export default function TodayTasksScreen() {
   const totalCount = allTasks.length;
   const progress = totalCount === 0 ? 0 : completedCount / totalCount;
   const remainingHours = Math.max(0, 24 - new Date().getHours());
+
+  const progressAnim = useRef(new Animated.Value(0)).current;
+  const [trackWidth, setTrackWidth] = useState(0);
+  const prevProgress = useRef(progress);
+
+  useEffect(() => {
+    Animated.timing(progressAnim, {
+      toValue: progress,
+      duration: 500,
+      useNativeDriver: false,
+    }).start();
+    prevProgress.current = progress;
+  }, [progress, progressAnim]);
 
   async function addRecommendation(recommendation: RecommendedTask) {
     const key = `recommendation-${recommendation.id}`;
@@ -339,11 +353,36 @@ export default function TodayTasksScreen() {
 
             <View style={styles.progressRow}>
               <Text style={styles.progressLabel}>完成进度</Text>
-              <View style={styles.progressTrack}>
-                <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
-                <Image
+              <View
+                style={styles.progressTrack}
+                onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
+              >
+                <Animated.View
+                  style={[
+                    styles.progressFill,
+                    {
+                      width: progressAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0, trackWidth],
+                      }),
+                    },
+                  ]}
+                />
+                <Animated.Image
                   source={require("@/assets/images/today-task/mini-mascot.png")}
-                  style={[styles.progressMascot, { left: `${progress * 92}%` }]}
+                  style={[
+                    styles.progressMascot,
+                    {
+                      transform: [
+                        {
+                          translateX: progressAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [-12, trackWidth - 12],
+                          }),
+                        },
+                      ],
+                    },
+                  ]}
                 />
               </View>
               <Text style={styles.progressPercent}>{Math.round(progress * 100)}%</Text>
@@ -710,6 +749,7 @@ const styles = StyleSheet.create({
   progressMascot: {
     position: "absolute",
     top: -10,
+    left: 0,
     width: 24,
     height: 24,
   },
